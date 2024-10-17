@@ -9,17 +9,19 @@ include(cmake/FindLLVM.cmake)
 include(cmake/FindMLIR.cmake)
 include(cmake/FindGCCJIT.cmake)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include_directories(
-    include
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_BINARY_DIR}/include
     ${MLIR_INCLUDE_DIRS}
     ${LLVM_INCLUDE_DIRS}
-    ${MLIR_TABLEGEN_OUTPUT_DIR}
 )
+link_directories(${LLVM_BUILD_LIBRARY_DIR})
+add_definitions(${LLVM_DEFINITIONS})
 
 add_subdirectory(include)
 add_subdirectory(src)

@@ -17,6 +17,10 @@ def GCCJIT_Dialect : Dialect {
     "::mlir::BuiltinDialect",
     "::mlir::func::FuncDialect",
   ];
+
+  let extraClassDeclaration = [{
+    void registerTypes();
+  }];
 }
 
 class GCCJIT_Op<string mnemonic, list<Trait> traits = []>
