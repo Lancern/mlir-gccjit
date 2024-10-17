@@ -1,0 +1,28 @@
+# macOS specific files
+.DS_Store
+
+# Build directories
+/build*
+/cmake-build*
+
+# Temp files created by most editors
+*~
+
+# vim swap files
+.*.sw?
+
+# JetBrains IDE files
+.idea
+
+# Visual Studio and vscode files
+.vs
+.vscode
+
+# clangd index and compilation databases
+.clangd
+.cache
+compile_commands.json
+compile_flags.txt
+
+# CMake user presets
+CMakeUserPresets.json
