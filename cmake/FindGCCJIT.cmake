@@ -1,10 +1,31 @@
 include_guard(GLOBAL)
 
+set(GCCJIT_DIRECTORY "" CACHE PATH "Path to GCCJIT installation")
+
+if (GCCJIT_DIRECTORY)
+    message(STATUS "Using GCCJIT from ${GCCJIT_DIRECTORY}")
+    set(GCCJIT_INCLUDE_DIRS ${GCCJIT_DIRECTORY}/include)
+    set(GCCJIT_LINK_DIRS ${GCCJIT_DIRECTORY})
+    if (EXISTS ${GCCJIT_DIRECTORY}/lib)
+        list(APPEND GCCJIT_LINK_DIRS ${GCCJIT_DIRECTORY}/lib)
+    endif()
+    set(CMAKE_REQUIRED_INCLUDES ${GCCJIT_INCLUDE_DIRS})
+endif ()
+
 include(CheckIncludeFileCXX)
 CHECK_INCLUDE_FILE_CXX(libgccjit.h LIBGCCJIT_H_EXIST)
 if (NOT LIBGCCJIT_H_EXIST)
-    message(FATAL_ERROR "could not find libgccjit.h in system headers")
+    message(FATAL_ERROR "could not find libgccjit.h in system headers (CMAKE_REQUIRED_INCLUDES: ${CMAKE_REQUIRED_INCLUDES})")
 endif ()
 
 add_library(libgccjit INTERFACE)
-target_link_libraries(libgccjit INTERFACE gccjit)
+
+if (GCCJIT_DIRECTORY)
+    find_library(GCCJIT_LIBRARY NAMES gccjit PATHS ${GCCJIT_LINK_DIRS})
+    if (NOT GCCJIT_LIBRARY)
+        message(FATAL_ERROR "could not find libgccjit in ${GCCJIT_LINK_DIRS}")
+    endif()
+    target_link_libraries(libgccjit INTERFACE ${GCCJIT_LIBRARY})
+else()
+    target_link_libraries(libgccjit INTERFACE gccjit)
+endif ()
