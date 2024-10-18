@@ -26,6 +26,8 @@ using namespace mlir::gccjit;
 #include "mlir-gccjit/IR/GCCJITOpsDialect.cpp.inc"
 
 void GCCJITDialect::initialize() {
+  registerTypes();
+  registerAttributes();
   addOperations<
 #define GET_OP_LIST
 #include "mlir-gccjit/IR/GCCJITOps.cpp.inc"

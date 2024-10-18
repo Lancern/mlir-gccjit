@@ -14,6 +14,7 @@ def GCCJIT_Dialect : Dialect {
   let cppNamespace = "::mlir::gccjit";
 
   let useDefaultAttributePrinterParser = 0;
+  let useDefaultTypePrinterParser = 0;
 
   let dependentDialects = [
     "::mlir::BuiltinDialect",
@@ -22,6 +23,9 @@ def GCCJIT_Dialect : Dialect {
 
   let extraClassDeclaration = [{
     void registerTypes();
+    void registerAttributes();
+    Type parseType(DialectAsmParser &parser) const override;
+    void printType(Type type, DialectAsmPrinter &printer) const override;
     Attribute parseAttribute(DialectAsmParser &parser,
                              Type type) const override;
 

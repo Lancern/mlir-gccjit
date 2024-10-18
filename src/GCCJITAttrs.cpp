@@ -78,4 +78,15 @@ void TLSModelAttr::print(AsmPrinter &Printer) const {
   Printer << "<" << getModel().getValue() << '>';
 }
 
+//===----------------------------------------------------------------------===//
+// GCCJIT Dialect
+//===----------------------------------------------------------------------===//
+
+void GCCJITDialect::registerAttributes() {
+  addAttributes<
+#define GET_ATTRDEF_LIST
+#include "mlir-gccjit/IR/GCCJITOpsAttributes.cpp.inc"
+      >();
+}
+
 } // namespace mlir::gccjit
