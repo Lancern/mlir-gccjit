@@ -1,4 +1,5 @@
 add_mlir_dialect_library(MLIRGCCJIT
+    GCCJITAttrs.cpp
     GCCJITDialect.cpp
     GCCJITOps.cpp
     GCCJITTypes.cpp
