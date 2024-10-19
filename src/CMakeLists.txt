@@ -9,7 +9,13 @@ add_mlir_dialect_library(MLIRGCCJIT
 
     DEPENDS
     MLIRGCCJITOpsIncGen
+    MLIRGCCJITEnumsGen
 
     LINK_LIBS PUBLIC
     MLIRIR
+
+    LINK_COMPONENTS
+    Core
 )
+
+add_subdirectory(tools)

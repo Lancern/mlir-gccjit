@@ -45,30 +45,30 @@ void GCCJITDialect::registerTypes() {
 //===----------------------------------------------------------------------===//
 
 namespace mlir::gccjit {
-Type GCCJITDialect::parseType(DialectAsmParser &Parser) const {
-  llvm::SMLoc TypeLoc = Parser.getCurrentLocation();
-  StringRef Mnemonic;
-  Type GenType;
+Type GCCJITDialect::parseType(DialectAsmParser &parser) const {
+  llvm::SMLoc typeLoc = parser.getCurrentLocation();
+  StringRef mnemonic;
+  Type genType;
 
   // Try to parse as a tablegen'd type.
-  OptionalParseResult ParseResult = generatedTypeParser(Parser, &Mnemonic, GenType);
-  if (ParseResult.has_value())
-    return GenType;
+  OptionalParseResult parseResult = generatedTypeParser(parser, &mnemonic, genType);
+  if (parseResult.has_value())
+    return genType;
   // TODO: add this for custom types
   // Type is not tablegen'd: try to parse as a raw C++ type.
-  return StringSwitch<function_ref<Type()>>(Mnemonic).Default([&] {
-    Parser.emitError(TypeLoc) << "unknown GCCJIT type: " << Mnemonic;
+  return StringSwitch<function_ref<Type()>>(mnemonic).Default([&] {
+    parser.emitError(typeLoc) << "unknown GCCJIT type: " << mnemonic;
     return Type();
   })();
 }
 
-void GCCJITDialect::printType(Type Ty, DialectAsmPrinter &OS) const {
+void GCCJITDialect::printType(Type type, DialectAsmPrinter &os) const {
   // Try to print as a tablegen'd type.
-  if (generatedTypePrinter(Ty, OS).succeeded())
+  if (generatedTypePrinter(type, os).succeeded())
     return;
   // TODO: add this for custom types
   // Type is not tablegen'd: try printing as a raw C++ type.
-  TypeSwitch<Type>(Ty).Default(
+  TypeSwitch<Type>(type).Default(
       [](Type) { llvm::report_fatal_error("printer is missing a handler for this type"); });
 }
 } // namespace mlir::gccjit
