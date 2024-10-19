@@ -24,6 +24,8 @@
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
 
+#include "mlir-gccjit/IR/GCCJITOpsEnums.cpp.inc"
+
 #define GET_ATTRDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsAttributes.cpp.inc"
 
@@ -31,14 +33,14 @@ namespace mlir::gccjit {
 //===----------------------------------------------------------------------===//
 // General GCCJIT parsing / printing
 //===----------------------------------------------------------------------===//
-Attribute GCCJITDialect::parseAttribute(DialectAsmParser &Parser, Type Type) const {
-  llvm::SMLoc TypeLoc = Parser.getCurrentLocation();
-  StringRef Mnemonic;
-  Attribute GenAttr;
-  OptionalParseResult ParseResult = generatedAttributeParser(Parser, &Mnemonic, Type, GenAttr);
-  if (ParseResult.has_value())
-    return GenAttr;
-  Parser.emitError(TypeLoc, "unknown attribute in GCCJIT dialect");
+Attribute GCCJITDialect::parseAttribute(DialectAsmParser &parser, Type type) const {
+  llvm::SMLoc typeLoc = parser.getCurrentLocation();
+  StringRef mnemonic;
+  Attribute genAttr;
+  OptionalParseResult parseResult = generatedAttributeParser(parser, &mnemonic, type, genAttr);
+  if (parseResult.has_value())
+    return genAttr;
+  parser.emitError(typeLoc, "unknown attribute in GCCJIT dialect");
   return Attribute();
 }
 
@@ -51,31 +53,31 @@ void GCCJITDialect::printAttribute(Attribute Attr, DialectAsmPrinter &Os) const 
 // TLSModelAttr definitions
 //===----------------------------------------------------------------------===//
 
-Attribute TLSModelAttr::parse(AsmParser &Parser, Type OdsType) {
-  auto Loc = Parser.getCurrentLocation();
-  if (Parser.parseLess())
+Attribute TLSModelAttr::parse(AsmParser &parser, Type odsType) {
+  auto loc = parser.getCurrentLocation();
+  if (parser.parseLess())
     return {};
 
   // Parse variable 'lang'.
-  llvm::StringRef Model;
-  if (Parser.parseKeyword(&Model))
+  llvm::StringRef model;
+  if (parser.parseKeyword(&model))
     return {};
 
   // Check if parsed value is a valid language.
-  auto ModelEnum = symbolizeTLSModelEnum(Model);
-  if (!ModelEnum.has_value()) {
-    Parser.emitError(Loc) << "invalid TLS model keyword '" << Model << "'";
+  auto modelEnum = symbolizeTLSModelEnum(model);
+  if (!modelEnum.has_value()) {
+    parser.emitError(loc) << "invalid TLS model keyword '" << model << "'";
     return {};
   }
 
-  if (Parser.parseGreater())
+  if (parser.parseGreater())
     return {};
 
-  return get(Parser.getContext(), TLSModelEnumAttr::get(Parser.getContext(), ModelEnum.value()));
+  return get(parser.getContext(), TLSModelEnumAttr::get(parser.getContext(), modelEnum.value()));
 }
 
-void TLSModelAttr::print(AsmPrinter &Printer) const {
-  Printer << "<" << getModel().getValue() << '>';
+void TLSModelAttr::print(AsmPrinter &printer) const {
+  printer << "<" << getModel().getValue() << '>';
 }
 
 //===----------------------------------------------------------------------===//
