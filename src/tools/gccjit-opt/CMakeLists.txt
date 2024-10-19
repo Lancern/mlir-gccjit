@@ -2,7 +2,7 @@ get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 get_property(extension_libs GLOBAL PROPERTY MLIR_EXTENSION_LIBS)
 
-add_mlir_tool(reuse-opt
+add_mlir_tool(gccjit-opt
   main.cpp
   DEPENDS
     MLIROptLib
@@ -11,7 +11,7 @@ add_mlir_tool(reuse-opt
     ${conversion_libs}
     ${extension_libs}
 )
-target_link_libraries(reuse-opt 
+target_link_libraries(gccjit-opt
   PRIVATE
     MLIROptLib
     MLIRGCCJIT
