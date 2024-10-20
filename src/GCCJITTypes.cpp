@@ -30,6 +30,15 @@
 
 using namespace mlir::gccjit;
 
+//===----------------------------------------------------------------------===//
+// CIR Custom Parser/Printer Signatures
+//===----------------------------------------------------------------------===//
+
+static mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p,
+                                           llvm::SmallVector<mlir::Type> &params, bool &isVarArg);
+static void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params,
+                              bool isVarArg);
+
 #define GET_TYPEDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsTypes.cpp.inc"
 
@@ -72,3 +81,48 @@ void GCCJITDialect::printType(Type type, DialectAsmPrinter &os) const {
       [](Type) { llvm::report_fatal_error("printer is missing a handler for this type"); });
 }
 } // namespace mlir::gccjit
+
+//===----------------------------------------------------------------------===//
+// FuncType Definitions
+//===----------------------------------------------------------------------===//
+
+mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p, llvm::SmallVector<mlir::Type> &params,
+                                    bool &isVarArg) {
+  isVarArg = false;
+  // `(` `)`
+  if (succeeded(p.parseOptionalRParen()))
+    return mlir::success();
+
+  // `(` `...` `)`
+  if (succeeded(p.parseOptionalEllipsis())) {
+    isVarArg = true;
+    return p.parseRParen();
+  }
+
+  // type (`,` type)* (`,` `...`)?
+  mlir::Type type;
+  if (p.parseType(type))
+    return mlir::failure();
+  params.push_back(type);
+  while (succeeded(p.parseOptionalComma())) {
+    if (succeeded(p.parseOptionalEllipsis())) {
+      isVarArg = true;
+      return p.parseRParen();
+    }
+    if (p.parseType(type))
+      return mlir::failure();
+    params.push_back(type);
+  }
+
+  return p.parseRParen();
+}
+
+void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params, bool isVarArg) {
+  llvm::interleaveComma(params, p, [&p](mlir::Type type) { p.printType(type); });
+  if (isVarArg) {
+    if (!params.empty())
+      p << ", ";
+    p << "...";
+  }
+  p << ')';
+}

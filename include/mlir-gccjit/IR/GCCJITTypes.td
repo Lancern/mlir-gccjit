@@ -30,4 +30,68 @@ def GCCJIT_LValueType : GCCJIT_Type<"LValue", "lvalue"> {
     }];
 }
 
+//===----------------------------------------------------------------------===//
+// FuncType
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_FuncType : GCCJIT_Type<"Func", "func"> {
+  let summary = "GCCJIT function type";
+  let description = [{
+    The `!gccjit.func` is a function type. It consists of a single return type, a
+    list of parameter types and can optionally be variadic.
+  }];
+
+  let parameters = (ins ArrayRefParameter<"Type">:$inputs, "Type":$returnType,
+                        "bool":$varArg);
+  let assemblyFormat = [{
+    `<` $returnType ` ` `(` custom<FuncTypeArgs>($inputs, $varArg) `>`
+  }];
+
+  let builders = [
+    TypeBuilderWithInferredContext<(ins
+      "ArrayRef<Type>":$inputs, "Type":$returnType,
+      CArg<"bool", "false">:$isVarArg), [{
+      return $_get(returnType.getContext(), inputs, returnType, isVarArg);
+    }]>
+  ];
+
+  let extraClassDeclaration = [{
+    /// Returns whether the function is variadic.
+    bool isVarArg() const { return getVarArg(); }
+
+    /// Returns the `i`th input operand type. Asserts if out of bounds.
+    Type getInput(unsigned i) const { return getInputs()[i]; }
+
+    /// Returns the number of arguments to the function.
+    unsigned getNumInputs() const { return getInputs().size(); }
+
+    /// Returns the result type of the function as an ArrayRef, enabling better
+    /// integration with generic MLIR utilities.
+    ArrayRef<Type> getReturnTypes() const;
+
+    /// Returns whether the function is returns void.
+    bool isVoid() const;
+
+    /// Returns a clone of this function type with the given argument
+    /// and result types.
+    FuncType clone(TypeRange inputs, TypeRange results) const;
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Void type
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_VoidType : GCCJIT_Type<"Void", "void"> {
+  let summary = "GCCJIT void type";
+  let description = [{
+    The `!gccjit.void` type represents the C/C++ `void` type.
+  }];
+  let extraClassDeclaration = [{
+    /// Returns a clone of this type with the given context.
+    std::string getAlias() const { return "void"; };
+  }];
+}
+
+
 #endif // GCCJIT_TYPES

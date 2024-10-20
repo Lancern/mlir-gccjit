@@ -15,9 +15,21 @@
 #ifndef MLIR_GCCJIT_IR_GCCJIT_OPS_H
 #define MLIR_GCCJIT_IR_GCCJIT_OPS_H
 
+#include "mlir-gccjit/IR/GCCJITAttrs.h"
+#include "mlir-gccjit/IR/GCCJITOpsEnums.h"
+#include "mlir-gccjit/IR/GCCJITTypes.h"
+#include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/Interfaces/CallInterfaces.h"
+#include "mlir/Interfaces/ControlFlowInterfaces.h"
+#include "mlir/Interfaces/FunctionInterfaces.h"
+#include "mlir/Interfaces/InferTypeOpInterface.h"
+#include "mlir/Interfaces/LoopLikeInterface.h"
+#include "mlir/Interfaces/MemorySlotInterfaces.h"
+#include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #define GET_OP_CLASSES
 #include "mlir-gccjit/IR/GCCJITOps.h.inc"
