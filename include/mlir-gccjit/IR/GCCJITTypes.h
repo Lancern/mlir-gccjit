@@ -16,6 +16,7 @@
 #define MLIR_GCCJIT_IR_GCCJIT_TYPES_H
 
 #include "mlir/IR/BuiltinTypes.h"
+#include <libgccjit.h>
 
 #define GET_TYPEDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsTypes.h.inc"
@@ -27,6 +28,37 @@ namespace mlir::gccjit {
 mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p, llvm::SmallVector<mlir::Type> &params,
                                     bool &isVarArg);
 void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params, bool isVarArg);
+
+inline bool isIntegral(mlir::Type type) {
+  if (auto qualified = dyn_cast<QualifiedType>(type))
+    return isIntegral(qualified.getElementType());
+
+  return isa<IntType>(type);
+}
+
+inline bool isIntegralOrPointer(mlir::Type type) {
+  if (auto qualified = dyn_cast<QualifiedType>(type))
+    return isIntegralOrPointer(qualified.getElementType());
+  return isa<IntType>(type) || isa<PointerType>(type);
+}
+
+inline bool isPointer(mlir::Type type) {
+  if (auto qualified = dyn_cast<QualifiedType>(type))
+    return isPointer(qualified.getElementType());
+  return isa<PointerType>(type);
+}
+
+inline bool isArithmetc(mlir::Type type) {
+  if (auto qualified = dyn_cast<QualifiedType>(type))
+    return isArithmetc(qualified.getElementType());
+  return isa<IntType>(type) || isa<FloatType>(type);
+}
+
+inline bool isArithmetcOrPointer(mlir::Type type) {
+  if (auto qualified = dyn_cast<QualifiedType>(type))
+    return isArithmetcOrPointer(qualified.getElementType());
+  return isa<IntType>(type) || isa<FloatType>(type) || isa<PointerType>(type);
+}
 } // namespace mlir::gccjit
 
 #endif // MLIR_GCCJIT_IR_GCCJIT_TYPES_H

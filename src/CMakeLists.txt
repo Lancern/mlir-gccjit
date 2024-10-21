@@ -13,6 +13,7 @@ add_mlir_dialect_library(MLIRGCCJIT
 
     LINK_LIBS PUBLIC
     MLIRIR
+    libgccjit
 
     LINK_COMPONENTS
     Core

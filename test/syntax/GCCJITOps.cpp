@@ -124,14 +124,13 @@ void printFunctionBody(OpAsmPrinter &p, Operation *op, Region &region) {
 LogicalResult gccjit::FuncOp::verify() {
   if (getBody().empty() && !isImported())
     return emitOpError("functions with bodies must have at least one block");
-  if (isImported()) {
-    if (!getBody().empty())
-      return emitOpError("external functions cannot have regions");
+  if (isImported() && !getBody().empty())
+    return emitOpError("external functions cannot have regions");
+  if (isImported())
     return success();
-  }
   ValueTypeRange<Region::BlockArgListType> entryArgTys = getBody().getArgumentTypes();
   if (entryArgTys.size() != getNumArguments())
-    return emitOpError("entry block arguments count should match function arguments count");
+    return emitOpError("os count should match function arguments count");
   for (auto [protoTy, realTy] : llvm::zip(getArgumentTypes(), entryArgTys)) {
     auto lvalueTy = dyn_cast<LValueType>(realTy);
     if (!lvalueTy)
@@ -157,14 +156,5 @@ LogicalResult ReturnOp::verify() {
     if (funcType.getReturnType() != getValue().getType())
       return emitOpError("return type mismatch");
   }
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
-// ZeroOp
-//===----------------------------------------------------------------------===//
-LogicalResult ZeroOp::verify() {
-  if (!isArithmetcOrPointer(getType()))
-    return emitOpError("operand should be an arithmetic or pointer type");
   return success();
 }

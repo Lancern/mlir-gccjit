@@ -92,4 +92,50 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
     }];
 }
 
+//===----------------------------------------------------------------------===//
+// ReturnOp
+//===----------------------------------------------------------------------===//
+def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp"]>]> {
+    let summary = "Return from function";
+    let description = [{
+      The "return" operation represents a return operation within a function.
+      The operation takes an optional operand and produces no results.
+      The operand type must match the signature of the function that contains
+      the operation.
+
+      ```mlir
+      gccjit.func @foo() {
+        ^entry:
+          gccjit.return
+      }
+      ```
+    }];
+    let arguments = (ins Optional<AnyType>:$value);
+    let assemblyFormat = [{
+      ($value^ `:` type($value))? attr-dict
+    }];
+    // Provide extra utility definitions on the c++ operation class definition.
+    let extraClassDeclaration = [{
+      bool hasReturnValue() { return getNumOperands() != 0; }
+    }];
+
+    let hasVerifier = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// ZeroOp
+//===----------------------------------------------------------------------===//
+def ZeroOp : GCCJIT_Op<"zero"> {
+    let summary = "Zero value";
+    let description = [{
+      The "zero" operation represents a constant zero value.
+      The operation takes no operands and produces a single result.
+    }];
+    let results = (outs AnyType:$result);
+    let assemblyFormat = [{
+      `:` type($result) attr-dict
+    }];
+    let hasVerifier = 1;
+}
+
 #endif // GCCJIT_OPS
