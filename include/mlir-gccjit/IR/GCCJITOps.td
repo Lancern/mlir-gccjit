@@ -43,7 +43,7 @@ def FuncOp : GCCJIT_Op<"func", [
       arguments if any parameter is present.
       
       ```
-      gccjit.func @foo (i32, i32) -> i32 {
+      gccjit.func exported @foo (i32, i32) -> i32 {
         ^entry(%arg0 : !gccjit.lvalue<i32>, %arg1 : !gccjit.lvalue<i32>):
           gccjit.return %2 : i32
       }
@@ -61,17 +61,25 @@ def FuncOp : GCCJIT_Op<"func", [
         - AlwaysInline: The function is always inlined.
     }];
     let arguments = (ins 
-    SymbolNameAttr:$symName, 
-        DefaultValuedAttr<FnKind, "FnKind::Exported">:$fnKind,
-        TypeAttrOf<GCCJIT_FuncType>:$functionType,
-        ArrayAttr:$gccjitFnAttrs,
-        OptionalAttr<DictArrayAttr>:$argAttrs,
-        OptionalAttr<DictArrayAttr>:$resAttrs
+    SymbolNameAttr:$sym_name, 
+        FnKind:$fn_kind,
+        TypeAttrOf<GCCJIT_FuncType>:$function_type,
+        ArrayAttr:$gccjit_fn_attrs,
+        OptionalAttr<DictArrayAttr>:$arg_attrs,
+        OptionalAttr<DictArrayAttr>:$res_attrs
     );
     let regions = (region AnyRegion:$body);
-    let hasCustomAssemblyFormat = 1;
     let hasVerifier = 1;
 
+    let assemblyFormat = [{
+      custom<FunctionKind>($fn_kind)
+      $sym_name
+      custom<FunctionType>($function_type)
+      custom<FunctionAttrs>($gccjit_fn_attrs)
+      (`arg_attrs` `(` $arg_attrs^ `)`)?
+      (`res_attrs` `(` $res_attrs^ `)`)?
+      custom<FunctionBody>($body) attr-dict
+    }];
     let extraClassDeclaration = [{
         /// Returns the region on the current operation that is callable. This may
         /// return null in the case of an external callable object, e.g. an external

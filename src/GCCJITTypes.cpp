@@ -31,13 +31,8 @@
 using namespace mlir::gccjit;
 
 //===----------------------------------------------------------------------===//
-// CIR Custom Parser/Printer Signatures
+// GCCJIT Custom Parser/Printer Signatures
 //===----------------------------------------------------------------------===//
-
-static mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p,
-                                           llvm::SmallVector<mlir::Type> &params, bool &isVarArg);
-static void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params,
-                              bool isVarArg);
 
 #define GET_TYPEDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsTypes.cpp.inc"
@@ -86,8 +81,9 @@ void GCCJITDialect::printType(Type type, DialectAsmPrinter &os) const {
 // FuncType Definitions
 //===----------------------------------------------------------------------===//
 
-mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p, llvm::SmallVector<mlir::Type> &params,
-                                    bool &isVarArg) {
+mlir::ParseResult mlir::gccjit::parseFuncTypeArgs(mlir::AsmParser &p,
+                                                  llvm::SmallVector<mlir::Type> &params,
+                                                  bool &isVarArg) {
   isVarArg = false;
   // `(` `)`
   if (succeeded(p.parseOptionalRParen()))
@@ -117,7 +113,8 @@ mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p, llvm::SmallVector<mlir::
   return p.parseRParen();
 }
 
-void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params, bool isVarArg) {
+void mlir::gccjit::printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params,
+                                     bool isVarArg) {
   llvm::interleaveComma(params, p, [&p](mlir::Type type) { p.printType(type); });
   if (isVarArg) {
     if (!params.empty())
@@ -125,4 +122,15 @@ void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params, b
     p << "...";
   }
   p << ')';
+}
+
+llvm::ArrayRef<mlir::Type> FuncType::getReturnTypes() const {
+  return static_cast<detail::FuncTypeStorage *>(getImpl())->returnType;
+}
+
+bool FuncType::isVoid() const { return mlir::isa<VoidType>(getReturnType()); }
+
+FuncType FuncType::clone(TypeRange inputs, TypeRange results) const {
+  assert(results.size() == 1 && "expected exactly one result type");
+  return get(llvm::to_vector(inputs), results[0], isVarArg());
 }
