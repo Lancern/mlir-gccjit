@@ -85,10 +85,12 @@ ParseResult parseFunctionType(OpAsmParser &parser, TypeAttr &type) {
     return failure();
   if (parseFuncTypeArgs(parser, params, isVarArg))
     return parser.emitError(parser.getCurrentLocation(), "failed to parse function type arguments");
-  if (parser.parseArrow())
-    return failure();
-  if (parser.parseType(retType))
-    return failure();
+  if (parser.parseOptionalArrow().succeeded()) {
+    if (parser.parseType(retType))
+      return failure();
+  } else {
+    retType = gccjit::VoidType::get(parser.getContext());
+  }
   gccjit::FuncType funcType = gccjit::FuncType::get(params, retType, isVarArg);
   type = TypeAttr::get(funcType);
   return success();
@@ -97,8 +99,10 @@ void printFunctionType(OpAsmPrinter &p, Operation *, TypeAttr type) {
   auto funcType = cast<FuncType>(type.getValue());
   p << "(";
   printFuncTypeArgs(p, funcType.getInputs(), funcType.isVarArg());
-  p << " -> ";
-  p.printType(funcType.getReturnType());
+  if (!isa<gccjit::VoidType>(funcType.getReturnType())) {
+    p << " -> ";
+    p.printType(funcType.getReturnType());
+  }
 }
 ParseResult parseFunctionBody(OpAsmParser &parser, Region &region) {
   (void)parser.parseOptionalRegion(region);
