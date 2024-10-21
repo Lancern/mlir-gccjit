@@ -38,7 +38,6 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
-#include <llvm-20/llvm/Support/LogicalResult.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -119,11 +118,11 @@ void printFunctionBody(OpAsmPrinter &p, Operation *op, Region &region) {
 //===----------------------------------------------------------------------===//
 
 LogicalResult gccjit::FuncOp::verify() {
-  if (getBody().empty() && !isDeclaration())
+  if (getBody().empty() && !isImported())
     return emitOpError("functions with bodies must have at least one block");
-  if (isDeclaration() && !getBody().empty())
+  if (isImported() && !getBody().empty())
     return emitOpError("external functions cannot have regions");
-  ValueTypeRange<BlockArgListType> entryArgTys = getCallableRegion()->getArgumentTypes();
+  ValueTypeRange<Region::BlockArgListType> entryArgTys = getBody().getArgumentTypes();
   if (entryArgTys.size() != getNumArguments())
     return emitOpError("entry block arguments count should match function arguments count");
   for (auto [protoTy, realTy] : llvm::zip(getArgumentTypes(), entryArgTys)) {
@@ -134,16 +133,4 @@ LogicalResult gccjit::FuncOp::verify() {
       return emitOpError("entry block argument type should match function argument type");
   }
   return success();
-}
-
-bool gccjit::FuncOp::isDeclaration() { return getFnKind() == FnKind::Imported; }
-
-LogicalResult gccjit::FuncOp::verifyType() { return success(); }
-
-// TODO: this should be revised, one need to check whether the function is a alias to another
-// function
-Region *gccjit::FuncOp::getCallableRegion() {
-  if (isExternal())
-    return nullptr;
-  return &getBody();
 }

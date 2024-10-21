@@ -22,11 +22,11 @@
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 
 int main(int argc, char **argv) {
-  mlir::DialectRegistry Registry;
-  mlir::registerAllDialects(Registry);
-  Registry.insert<mlir::gccjit::GCCJITDialect>();
-  mlir::registerAllExtensions(Registry);
+  mlir::DialectRegistry registry;
+  mlir::registerAllDialects(registry);
+  registry.insert<mlir::gccjit::GCCJITDialect>();
+  mlir::registerAllExtensions(registry);
   mlir::registerAllPasses();
   return failed(
-      mlir::MlirOptMain(argc, argv, "GCCJIT analysis and optimization driver\n", Registry));
+      mlir::MlirOptMain(argc, argv, "GCCJIT analysis and optimization driver\n", registry));
 }

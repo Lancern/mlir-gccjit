@@ -31,10 +31,7 @@ def FnKind : I32EnumAttr<"FnKind", "function kind", [
   let cppNamespace = "::mlir::gccjit";
 }
 
-def FuncOp : GCCJIT_Op<"func", [
-  AutomaticAllocationScope, CallableOpInterface, FunctionOpInterface,
-  IsolatedFromAbove
-]> {
+def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
     let summary = "Declare or define a function for GCCJIT";
     let description = [{
       FuncOp is the top-level operation for defining a new function in GCCJIT.
@@ -81,52 +78,17 @@ def FuncOp : GCCJIT_Op<"func", [
       custom<FunctionBody>($body) attr-dict
     }];
     let extraClassDeclaration = [{
-        /// Returns the region on the current operation that is callable. This may
-        /// return null in the case of an external callable object, e.g. an external
-        /// function.
-        ::mlir::Region *getCallableRegion();
-
-        /// Returns the results types that the callable region produces when
-        /// executed.
-        ArrayRef<Type> getCallableResults() {
-            if (::llvm::isa<::mlir::gccjit::VoidType>(getFunctionType().getReturnType()))
-                return {};
-            return getFunctionType().getReturnTypes();
-        }
-
-        /// Returns the argument attributes for all callable region arguments or
-        /// null if there are none.
-        ::mlir::ArrayAttr getCallableArgAttrs() {
-            return getArgAttrs().value_or(nullptr);
-        }
-
-        /// Returns the result attributes for all callable region results or null if
-        /// there are none.
-        ::mlir::ArrayAttr getCallableResAttrs() {
-            return getResAttrs().value_or(nullptr);
-        }
-
         /// Returns the argument types of this function.
         ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
 
         /// Returns the result types of this function.
         ArrayRef<Type> getResultTypes() { return getFunctionType().getReturnTypes(); }
 
-        /// Hook for OpTrait::FunctionOpInterfaceTrait, called after verifying that
-        /// the 'type' attribute is present and checks if it holds a function type.
-        /// Ensures getType, getNumFuncArguments, and getNumFuncResults can be
-        /// called safely.
-        LogicalResult verifyType();
+        /// Returns nymber of arguments to the function.
+        unsigned getNumArguments() { return getFunctionType().getNumInputs(); }
 
-        //===------------------------------------------------------------------===//
-        // SymbolOpInterface Methods
-        //===------------------------------------------------------------------===//
-
-        bool isDeclaration();
-
-        bool hasAvailableExternallyLinkage() {
-            return getFnKind() == FnKind::Exported;
-        }
+        /// Checks if the function is imported.
+        bool isImported() { return getFnKind() == FnKind::Imported; }
     }];
 }
 
