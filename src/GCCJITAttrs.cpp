@@ -44,8 +44,8 @@ Attribute GCCJITDialect::parseAttribute(DialectAsmParser &parser, Type type) con
   return Attribute();
 }
 
-void GCCJITDialect::printAttribute(Attribute Attr, DialectAsmPrinter &Os) const {
-  if (failed(generatedAttributePrinter(Attr, Os)))
+void GCCJITDialect::printAttribute(Attribute attr, DialectAsmPrinter &os) const {
+  if (failed(generatedAttributePrinter(attr, os)))
     llvm_unreachable("unexpected GCCJIT attribute");
 }
 

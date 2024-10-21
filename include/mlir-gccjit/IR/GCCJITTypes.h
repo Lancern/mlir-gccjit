@@ -20,4 +20,13 @@
 #define GET_TYPEDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsTypes.h.inc"
 
+//===----------------------------------------------------------------------===//
+// GCCJIT Custom Parser/Printer Signatures
+//===----------------------------------------------------------------------===//
+namespace mlir::gccjit {
+mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p, llvm::SmallVector<mlir::Type> &params,
+                                    bool &isVarArg);
+void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params, bool isVarArg);
+} // namespace mlir::gccjit
+
 #endif // MLIR_GCCJIT_IR_GCCJIT_TYPES_H
