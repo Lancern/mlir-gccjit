@@ -93,5 +93,78 @@ def GCCJIT_VoidType : GCCJIT_Type<"Void", "void"> {
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// Pointer type
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_PointerType : GCCJIT_Type<"Pointer", "ptr"> {
+  let summary = "GCCJIT pointer type";
+  let description = [{
+    The `!gccjit.ptr` type represents a pointer type. It consists of a single
+    element type. 
+  }];
+  let parameters = (ins "mlir::Type":$elementType);
+  let assemblyFormat = [{
+    `<` $elementType `>`
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Qualified type
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_QualifiedType : GCCJIT_Type<"Qualified", "qualified"> {
+  let summary = "GCCJIT qualified type";
+  let description = [{
+    GCCJIT type can be qualified with `const`, `restrict`, `volatile`.
+  }];
+  let parameters = (ins "mlir::Type":$elementType, "bool":$isConst,
+                        "bool":$isRestrict, "bool":$isVolatile);
+  let hasCustomAssemblyFormat = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Integer type
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_IntType : GCCJIT_Type<"Int", "int"> {
+  let summary = "Integer type";
+  let description = [{
+    GCCJIT type that represents integer types with arbitrary precision:
+    - GCCJIT type can be either explicitly sized or not.
+    - GCCJIT type can be either signed or unsigned.
+  }];
+
+  let parameters = (ins "::gcc_jit_types":$kind);
+  let hasCustomAssemblyFormat = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Float type
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_FloatType : GCCJIT_Type<"Float", "fp"> {
+  let summary = "Floating point type";
+  let description = [{
+    GCCJIT type that represents floating point types
+  }];
+
+  let parameters = (ins "::gcc_jit_types":$kind);
+  let hasCustomAssemblyFormat = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Complex type
+//===----------------------------------------------------------------------===//
+
+def GCCJIT_ComplexType : GCCJIT_Type<"Complex", "complex"> {
+  let summary = "Complex type";
+  let description = [{
+    GCCJIT type that represents complex types
+  }];
+
+  let parameters = (ins "::gcc_jit_types":$kind);
+  let hasCustomAssemblyFormat = 1;
+}
 
 #endif // GCCJIT_TYPES

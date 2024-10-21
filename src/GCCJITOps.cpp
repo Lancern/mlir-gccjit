@@ -124,8 +124,11 @@ void printFunctionBody(OpAsmPrinter &p, Operation *op, Region &region) {
 LogicalResult gccjit::FuncOp::verify() {
   if (getBody().empty() && !isImported())
     return emitOpError("functions with bodies must have at least one block");
-  if (isImported() && !getBody().empty())
-    return emitOpError("external functions cannot have regions");
+  if (isImported()) {
+    if (!getBody().empty())
+      return emitOpError("external functions cannot have regions");
+    return success();
+  }
   ValueTypeRange<Region::BlockArgListType> entryArgTys = getBody().getArgumentTypes();
   if (entryArgTys.size() != getNumArguments())
     return emitOpError("entry block arguments count should match function arguments count");
@@ -136,5 +139,32 @@ LogicalResult gccjit::FuncOp::verify() {
     if (protoTy != lvalueTy.getInnerType())
       return emitOpError("entry block argument type should match function argument type");
   }
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// ReturnOp
+//===----------------------------------------------------------------------===//
+
+LogicalResult ReturnOp::verify() {
+  auto funcOp = getParentOp();
+  auto funcType = funcOp.getFunctionType();
+  if (!hasReturnValue() && !funcType.isVoid())
+    return emitOpError("must have a return value matching the function type");
+  if (hasReturnValue()) {
+    if (funcType.isVoid())
+      return emitOpError("cannot have a return value for a void function");
+    if (funcType.getReturnType() != getValue().getType())
+      return emitOpError("return type mismatch");
+  }
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// ZeroOp
+//===----------------------------------------------------------------------===//
+LogicalResult ZeroOp::verify() {
+  if (!isArithmetc(getType()))
+    return emitOpError("operand should be an arithmetic type");
   return success();
 }
