@@ -62,7 +62,14 @@ def TLSModelAttr : GCCJIT_Attr<"TLSModel", "tls_model"> {
 def IntAttr : GCCJIT_Attr<"Int", "int"> {
   let summary = "An Attribute containing a integer value";
   let description = [{
-    Integer literal attribute.
+    Integer literal attribute. An integral literal in GCCJIT can
+    either be created from a `long` or an `int`. To create a long
+    literal, use `#gccjit.int<long, value>`. To create an int literal,
+    use `#gccjit.int<value>`.
+    ```mlir
+    #gccjit.int<long, 42>
+    #gccjit.int<42>
+    ```
   }];
   let parameters = (ins "::mlir::APInt":$value, "bool":$isLong);
   let hasCustomAssemblyFormat = 1;
