@@ -23,6 +23,7 @@
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <variant>
 
 #include "mlir-gccjit/IR/GCCJITOpsEnums.cpp.inc"
 
@@ -78,6 +79,52 @@ Attribute TLSModelAttr::parse(AsmParser &parser, Type odsType) {
 
 void TLSModelAttr::print(AsmPrinter &printer) const {
   printer << "<" << getModel().getValue() << '>';
+}
+
+//===----------------------------------------------------------------------===//
+// IntAttr definitions
+//===----------------------------------------------------------------------===//
+
+Attribute IntAttr::parse(AsmParser &parser, Type odsType) {
+  mlir::APInt storage;
+  bool isLong = false;
+
+  // Consume the '<' symbol.
+  if (parser.parseLess())
+    return {};
+
+  // Fetch arbitrary precision integer value.
+  if (parser.parseOptionalKeyword("long").succeeded()) {
+    if (parser.parseComma())
+      return {};
+    isLong = true;
+    long value;
+    if (parser.parseInteger(value))
+      parser.emitError(parser.getCurrentLocation(), "expected integer value");
+    storage = mlir::APInt(sizeof(long) * 8, value, true);
+    if (storage.getSExtValue() != value)
+      parser.emitError(parser.getCurrentLocation(), "integer value too large for the given type");
+  } else {
+    int value;
+    if (parser.parseInteger(value))
+      parser.emitError(parser.getCurrentLocation(), "expected integer value");
+    storage = mlir::APInt(sizeof(int) * 8, value, true);
+    if (storage.getZExtValue() != static_cast<uint64_t>(value))
+      parser.emitError(parser.getCurrentLocation(), "integer value too large for the given type");
+  }
+
+  // Consume the '>' symbol.
+  if (parser.parseGreater())
+    return {};
+
+  return IntAttr::get(parser.getContext(), storage, isLong);
+}
+
+void IntAttr::print(AsmPrinter &printer) const {
+  printer << "<";
+  if (getIsLong())
+    printer << "long, ";
+  printer << getValue() << '>';
 }
 
 //===----------------------------------------------------------------------===//

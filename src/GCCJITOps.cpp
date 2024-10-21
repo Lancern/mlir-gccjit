@@ -19,6 +19,7 @@
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
+#include "mlir/IR/BlockSupport.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -34,11 +35,14 @@
 #include "mlir/IR/TypeUtilities.h"
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
+#include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/LogicalResult.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -113,6 +117,70 @@ void printFunctionBody(OpAsmPrinter &p, Operation *op, Region &region) {
   if (!region.empty())
     p.printRegion(region);
 }
+
+/*
+      custom<SwitchOpCases>(ref(type($value)),
+                              $defaultDestination,
+                              $case_lowerbound,
+                              $case_upperbound,
+                              $caseDestinations)
+*/
+
+ParseResult parseSwitchOpCases(OpAsmParser &parser, Type /*todo: check value compatibility*/,
+                               Block *&defaultDestinationSuccessor, ArrayAttr &lowerbound,
+                               ArrayAttr &upperbound, SmallVectorImpl<Block *> &caseDestinations) {
+  llvm::SmallVector<Attribute> lowerboundVec;
+  llvm::SmallVector<Attribute> upperboundVec;
+  if (parser.parseKeyword("default"))
+    return {};
+  if (parser.parseArrow())
+    return {};
+  if (parser.parseSuccessor(defaultDestinationSuccessor))
+    return parser.emitError(parser.getCurrentLocation(), "expected default destination successor");
+  while (parser.parseOptionalComma().succeeded()) {
+    gccjit::IntAttr lowerbound{};
+    gccjit::IntAttr upperbound{};
+    if (parser.parseCustomAttributeWithFallback<gccjit::IntAttr>(lowerbound))
+      return parser.emitError(parser.getCurrentLocation(), "expected lowerbound attribute");
+    if (parser.parseOptionalEllipsis().succeeded()) {
+      if (parser.parseCustomAttributeWithFallback<gccjit::IntAttr>(upperbound))
+        return parser.emitError(parser.getCurrentLocation(), "expected upperbound attribute");
+    } else
+      upperbound = lowerbound;
+    lowerboundVec.push_back(lowerbound);
+    upperboundVec.push_back(upperbound);
+    if (parser.parseArrow())
+      return {};
+    Block *caseDestination;
+    if (parser.parseSuccessor(caseDestination))
+      return parser.emitError(parser.getCurrentLocation(), "expected case destination successor");
+    caseDestinations.push_back(caseDestination);
+  }
+  lowerbound = ArrayAttr::get(parser.getContext(), lowerboundVec);
+  upperbound = ArrayAttr::get(parser.getContext(), upperboundVec);
+  return success();
+};
+
+void printSwitchOpCases(OpAsmPrinter &p, Operation *op,
+                        mlir::gccjit::IntType /*todo: check value compatibility*/,
+                        Block *defaultDestinationSuccessor, ArrayAttr lowerbound,
+                        ArrayAttr upperbound, SuccessorRange caseDestinations) {
+  p << "default -> ";
+  p.printSuccessor(defaultDestinationSuccessor);
+  for (auto [lower, upper, dest] : llvm::zip(lowerbound, upperbound, caseDestinations)) {
+    p << ",";
+    p.printNewline();
+    p.printStrippedAttrOrType(cast<gccjit::IntAttr>(lower));
+    if (lower != upper) {
+      p << "...";
+      p.printStrippedAttrOrType(cast<gccjit::IntAttr>(upper));
+    }
+    p << " -> ";
+    p.printSuccessor(dest);
+  }
+  p.printNewline();
+}
+
 } // namespace
 
 #define GET_OP_CLASSES
@@ -176,5 +244,14 @@ LogicalResult ZeroOp::verify() {
 LogicalResult AsRValueOp::verify() {
   if (getRvalue().getType() != getLvalue().getType().getInnerType())
     return emitOpError("operand's inner type should match result type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// EvalOp
+//===----------------------------------------------------------------------===//
+LogicalResult EvalOp::verify() {
+  if (isa<mlir::gccjit::LValueType>(getExpr().getType()))
+    return emitOpError("operand should be an rvalue");
   return success();
 }

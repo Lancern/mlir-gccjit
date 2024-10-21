@@ -56,6 +56,17 @@ def TLSModelAttr : GCCJIT_Attr<"TLSModel", "tls_model"> {
   let genVerifyDecl = 0;
 }
 
+//===----------------------------------------------------------------------===//
+// Integer Attrs
+//===----------------------------------------------------------------------===//
+def IntAttr : GCCJIT_Attr<"Int", "int"> {
+  let summary = "An Attribute containing a integer value";
+  let description = [{
+    Integer literal attribute.
+  }];
+  let parameters = (ins "::mlir::APInt":$value, "bool":$isLong);
+  let hasCustomAssemblyFormat = 1;
+}
 #endif // MLIR_GCCJIT_IR_GCCJIT_ATTRS
 
 
