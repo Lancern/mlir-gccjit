@@ -43,9 +43,13 @@ def FuncOp : GCCJIT_Op<"func", [
       arguments if any parameter is present.
       
       ```
-      gccjit.func @foo(%arg0: i32, %arg1: i32) -> i32 {
-        ^entry(%0 : !gccjit.lvalue<i32>, %1 : !gccjit.lvalue<i32>):
+      gccjit.func @foo (i32, i32) -> i32 {
+        ^entry(%arg0 : !gccjit.lvalue<i32>, %arg1 : !gccjit.lvalue<i32>):
           gccjit.return %2 : i32
+      }
+      gccjit.func always_inline @bar () -> void {
+        ^entry:
+          gccjit.return
       }
       ```
 

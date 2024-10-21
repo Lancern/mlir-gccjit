@@ -13,9 +13,7 @@
 // limitations under the License.
 
 #include "mlir-gccjit/IR/GCCJITOps.h"
-#include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
-#include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
