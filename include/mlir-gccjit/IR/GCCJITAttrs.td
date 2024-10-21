@@ -74,6 +74,35 @@ def IntAttr : GCCJIT_Attr<"Int", "int"> {
   let parameters = (ins "::mlir::APInt":$value, "bool":$isLong);
   let hasCustomAssemblyFormat = 1;
 }
+
+//===----------------------------------------------------------------------===//
+// OptLevel Attr
+//===----------------------------------------------------------------------===//
+
+def OptLevel_0 : I32EnumAttrCase<"O0", 0, "O0">;
+def OptLevel_1 : I32EnumAttrCase<"O1", 1, "O1">;
+def OptLevel_2 : I32EnumAttrCase<"O2", 2, "O2">;
+def OptLevel_3 : I32EnumAttrCase<"O3", 3, "O2">;
+def OptLevelEnum : I32EnumAttr<"OptLevelEnum", "Optimization level",
+                          [OptLevel_0, OptLevel_1, OptLevel_2, OptLevel_3]> {
+  let cppNamespace = "mlir::gccjit";
+}
+def OptLevelAttr : GCCJIT_Attr<"OptLevel", "opt_level"> {
+  let summary = "Optimization level";
+  let parameters = (ins "OptLevelEnumAttr":$level);
+  let description = [{
+    Represents the optimization level.
+  }];
+  let hasCustomAssemblyFormat = 1;
+  let extraClassDeclaration = [{
+    bool isO0() const { return getLevel().getValue() == OptLevelEnum::O0; }
+    bool isO1() const { return getLevel().getValue() == OptLevelEnum::O1; }
+    bool isO2() const { return getLevel().getValue() == OptLevelEnum::O2; }
+    bool isO3() const { return getLevel().getValue() == OptLevelEnum::O3; }
+  }];
+  let genVerifyDecl = 0;
+}
+
 #endif // MLIR_GCCJIT_IR_GCCJIT_ATTRS
 
 

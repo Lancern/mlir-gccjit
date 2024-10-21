@@ -14,9 +14,9 @@
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
-
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir/IR/Attributes.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Support/LLVM.h"
@@ -125,6 +125,36 @@ void IntAttr::print(AsmPrinter &printer) const {
   if (getIsLong())
     printer << "long, ";
   printer << getValue() << '>';
+}
+
+//===----------------------------------------------------------------------===//
+// OptLevelAttr definitions
+//===----------------------------------------------------------------------===//
+Attribute OptLevelAttr::parse(AsmParser &parser, Type odsType) {
+  llvm::SMLoc loc = parser.getCurrentLocation();
+  if (parser.parseLess())
+    return {};
+
+  // Parse variable 'level'.
+  llvm::StringRef level;
+  if (parser.parseKeyword(&level))
+    return {};
+
+  // Check if parsed value is a valid optimization level.
+  auto optLevelEnum = symbolizeOptLevelEnum(level);
+  if (!optLevelEnum.has_value()) {
+    parser.emitError(loc) << "invalid optimization level keyword '" << level << "'";
+    return {};
+  }
+
+  if (parser.parseGreater())
+    return {};
+
+  return get(parser.getContext(), OptLevelEnumAttr::get(parser.getContext(), optLevelEnum.value()));
+}
+
+void OptLevelAttr::print(AsmPrinter &printer) const {
+  printer << "<" << getLevel().getValue() << '>';
 }
 
 //===----------------------------------------------------------------------===//
