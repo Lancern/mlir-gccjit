@@ -164,7 +164,7 @@ LogicalResult ReturnOp::verify() {
 // ZeroOp
 //===----------------------------------------------------------------------===//
 LogicalResult ZeroOp::verify() {
-  if (!isArithmetcOrPointer(getType()))
-    return emitOpError("operand should be an arithmetic or pointer type");
+  if (!isArithmetc(getType()))
+    return emitOpError("operand should be an arithmetic type");
   return success();
 }
