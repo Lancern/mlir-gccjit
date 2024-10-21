@@ -13,12 +13,18 @@
 // limitations under the License.
 
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
+#include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
+#include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/TypeRange.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -87,11 +93,103 @@ void registerTranslation(llvm::StringRef name, llvm::StringRef desc, bool reprod
       },
       [](DialectRegistry &registry) { registry.insert<gccjit::GCCJITDialect>(); });
 }
+
+class GCCJITTypeConverter {
+  llvm::DenseMap<mlir::Type, gcc_jit_type *> typeMap;
+  gcc_jit_context *ctxt;
+
+public:
+  GCCJITTypeConverter(gcc_jit_context *ctxt) : ctxt(ctxt) {}
+  void convertTypes(mlir::TypeRange types, llvm::SmallVectorImpl<gcc_jit_type *> &result) {
+    for (auto type : types)
+      result.push_back(convertType(type));
+  }
+  gcc_jit_type *convertType(mlir::Type type) {
+    if (auto it = typeMap.find(type); it != typeMap.end())
+      return it->second;
+    auto *res = llvm::TypeSwitch<mlir::Type, gcc_jit_type *>(type)
+                    .Case([&](gccjit::LValueType t) { return convertType(t.getInnerType()); })
+                    .Case([&](gccjit::PointerType t) {
+                      auto *pointee = convertType(t.getElementType());
+                      return gcc_jit_type_get_pointer(pointee);
+                    })
+                    .Case([&](gccjit::QualifiedType t) {
+                      auto *res = convertType(t.getElementType());
+                      if (t.getIsConst())
+                        res = gcc_jit_type_get_const(res);
+                      if (t.getIsRestrict())
+                        res = gcc_jit_type_get_restrict(res);
+                      if (t.getIsVolatile())
+                        res = gcc_jit_type_get_volatile(res);
+                      return res;
+                    })
+                    .Case([&](gccjit::IntType t) {
+                      auto kind = t.getKind();
+                      return gcc_jit_context_get_type(ctxt, kind);
+                    })
+                    .Case([&](gccjit::FloatType t) {
+                      auto kind = t.getKind();
+                      return gcc_jit_context_get_type(ctxt, kind);
+                    })
+                    .Case([&](gccjit::ComplexType t) {
+                      auto kind = t.getKind();
+                      return gcc_jit_context_get_type(ctxt, kind);
+                    })
+                    .Case([&](gccjit::VoidType t) {
+                      return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_VOID);
+                    })
+                    .Default([](mlir::Type) { return nullptr; });
+    typeMap[type] = res;
+    return res;
+  }
+};
+
+gcc_jit_function_kind convertFnKind(FnKind kind) {
+  switch (kind) {
+  case FnKind::Exported:
+    return GCC_JIT_FUNCTION_EXPORTED;
+  case FnKind::Internal:
+    return GCC_JIT_FUNCTION_INTERNAL;
+  case FnKind::Imported:
+    return GCC_JIT_FUNCTION_IMPORTED;
+  case FnKind::AlwaysInline:
+    return GCC_JIT_FUNCTION_ALWAYS_INLINE;
+  }
+}
+
+void declareAllFunctionAndGlobals(gcc_jit_context *ctxt, ModuleOp op) {
+  // todo: declare globals
+  // this should be wrapped in a global context holder
+  GCCJITTypeConverter typeConverter(ctxt);
+  op.walk([&](gccjit::FuncOp func) {
+    auto type = func.getFunctionType();
+    llvm::SmallVector<gcc_jit_type *> paramTypes;
+    llvm::SmallVector<gcc_jit_param *> params;
+    typeConverter.convertTypes(type.getInputs(), paramTypes);
+    auto *returnType = typeConverter.convertType(type.getReturnType());
+    auto kind = convertFnKind(func.getFnKind());
+    auto name = func.getSymName().str();
+    auto enumerated = llvm::enumerate(paramTypes);
+    std::transform(
+        enumerated.begin(), enumerated.end(), std::back_inserter(params), [&](auto pair) {
+          auto index = pair.index();
+          auto type = pair.value();
+          auto name = llvm::Twine("arg").concat(llvm::Twine(index)).str();
+          return gcc_jit_context_new_param(ctxt, /*todo: location*/ nullptr, type, name.c_str());
+        });
+    auto *funcType = gcc_jit_context_new_function(ctxt, /*todo: location*/ nullptr, kind,
+                                                  returnType, name.c_str(), paramTypes.size(),
+                                                  params.data(), type.isVarArg());
+    (void)funcType;
+  });
+}
+
 } // namespace
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op) {
   gcc_jit_context *ctxt = gcc_jit_context_acquire();
   populateGCCJITModuleOptions(ctxt, op);
+  declareAllFunctionAndGlobals(ctxt, op);
   return GCCJITContext(ctxt);
 }
 
