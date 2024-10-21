@@ -154,7 +154,7 @@ def GCCJIT_FloatType : GCCJIT_Type<"Float", "fp"> {
 }
 
 //===----------------------------------------------------------------------===//
-// Float type
+// Complex type
 //===----------------------------------------------------------------------===//
 
 def GCCJIT_ComplexType : GCCJIT_Type<"Complex", "complex"> {
