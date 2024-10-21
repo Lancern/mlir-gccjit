@@ -33,6 +33,7 @@
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/TypeUtilities.h"
 #include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 #include "mlir/Interfaces/FunctionImplementation.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
@@ -166,5 +167,14 @@ LogicalResult ReturnOp::verify() {
 LogicalResult ZeroOp::verify() {
   if (!isArithmetc(getType()))
     return emitOpError("operand should be an arithmetic type");
+  return success();
+}
+
+//===----------------------------------------------------------------------===//
+// AsRValueOp
+//===----------------------------------------------------------------------===//
+LogicalResult AsRValueOp::verify() {
+  if (getRvalue().getType() != getLvalue().getType().getInnerType())
+    return emitOpError("operand's inner type should match result type");
   return success();
 }

@@ -139,6 +139,18 @@ def GCCJIT_IntType : GCCJIT_Type<"Int", "int"> {
   let hasCustomAssemblyFormat = 1;
 }
 
+class SpecificInt<string enumValue>
+  : Type<And<[
+        CPred<"::mlir::isa<::mlir::gccjit::IntType>($_self)">,
+        CPred<"::mlir::cast<::mlir::gccjit::IntType>($_self).getKind() == " # enumValue>
+        ]>, "integer with " #enumValue, "::mlir::gccjit::IntType">,
+    BuildableType<
+      "mlir::gccjit::IntType::get($_builder.getContext(), "
+      # enumValue # ")"> {
+}
+
+def GCCJIT_BoolType : SpecificInt<"GCC_JIT_TYPE_BOOL">;
+
 //===----------------------------------------------------------------------===//
 // Float type
 //===----------------------------------------------------------------------===//

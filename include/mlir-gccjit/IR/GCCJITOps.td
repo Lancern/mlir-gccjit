@@ -138,4 +138,71 @@ def ZeroOp : GCCJIT_Op<"zero"> {
     let hasVerifier = 1;
 }
 
+//===----------------------------------------------------------------------===//
+// JumpOp
+//===----------------------------------------------------------------------===//
+def JumpOp : GCCJIT_Op<"jump", [
+  Terminator, 
+  Pure, 
+  ParentOneOf<["FuncOp"]>
+]> {
+    let summary = "Unconditional jump";
+    let description = [{
+      Terminate a block by adding a jump to the given target block.
+      This is roughly equivalent to this C code:
+      ```
+      goto target;
+      ```
+      Unlike other branch op in MLIR, this jump op does not support any block arguments.
+    }];
+    let successors = (successor AnySuccessor:$dest);
+    let assemblyFormat = [{
+      $dest attr-dict
+    }];
+}
+
+//===----------------------------------------------------------------------===//
+// ConditionalOp
+//===----------------------------------------------------------------------===//
+def ConditionalOp : GCCJIT_Op<"conditional", [
+  Terminator, 
+  Pure, 
+  ParentOneOf<["FuncOp"]>
+]> {
+    let summary = "Unconditional jump";
+    let description = [{
+      Terminate a block by adding evaluation of an rvalue, branching on the result to the appropriate successor block.
+      This is roughly equivalent to this C code:
+      ```
+      if (boolval)
+        goto on_true;
+      else
+        goto on_false;
+      ```
+      Unlike other branch op in MLIR, this conditional op does not support any block arguments.
+    }];
+    let arguments = (ins GCCJIT_BoolType:$condition);
+    let successors = (successor AnySuccessor:$on_true, AnySuccessor:$on_false);
+    let assemblyFormat = [{
+      `(` $condition `:` type($condition) `)` `,` $on_true `,` $on_false attr-dict
+    }];
+}
+
+//===----------------------------------------------------------------------===//
+// AsRValueOp
+//===----------------------------------------------------------------------===//
+def AsRValueOp : GCCJIT_Op<"as_rvalue"> {
+    let summary = "Read a lvalue to rvalue";
+    let description = [{
+      The "as_rvalue" operation converts an lvalue to an rvalue.
+      The operation takes a single operand and produces a single result.
+    }];
+    let arguments = (ins GCCJIT_LValueType:$lvalue);
+    let results = (outs AnyType:$rvalue);
+    let assemblyFormat = [{
+       $lvalue `:` type($lvalue) `to` type($rvalue) attr-dict
+    }];
+    let hasVerifier = 1;
+}
+
 #endif // GCCJIT_OPS
