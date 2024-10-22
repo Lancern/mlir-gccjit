@@ -279,7 +279,7 @@ def EvalOp : GCCJIT_Op<"eval"> {
 //===----------------------------------------------------------------------===//
 // LocalOp
 //===----------------------------------------------------------------------===//
-def LocalOp : GCCJIT_Op<"local_var", [ParentOneOf<["FuncOp"]>]> {
+def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
   let summary = "Declare a local variable";
   let description = [{
     The "local_var" operation declares a local variable.
@@ -300,13 +300,14 @@ def LocalOp : GCCJIT_Op<"local_var", [ParentOneOf<["FuncOp"]>]> {
 //===----------------------------------------------------------------------===//
 // GlobalOp
 //===----------------------------------------------------------------------===//
-def GlobalOp : GCCJIT_Op<"global_var"> {
+def GlobalOp : GCCJIT_Op<"global"> {
   let summary = "Declare a global variable";
   let description = [{
     The "global_var" operation declares a global variable.
   }];
   let arguments = (ins 
     SymbolNameAttr:$sym_name,
+    TypeAttrOf<GCCJIT_LValueType>:$type,
     OptionalAttr<RegNameAttr>:$reg_name,
     OptionalAttr<IndexAttr>:$alignment,
     OptionalAttr<TLSModelAttr>:$tls_model,
@@ -314,7 +315,6 @@ def GlobalOp : GCCJIT_Op<"global_var"> {
     OptionalAttr<VisibilityAttr>:$visibility,
     OptionalAttr<AnyAttrOf<[StringInitializerAttr, ByteArrayInitializerAttr]>>:$initializer
   );
-  let results = (outs GCCJIT_LValueType:$var);
   let regions = (region AnyRegion:$body);
   let assemblyFormat = [{
     $sym_name
@@ -323,7 +323,7 @@ def GlobalOp : GCCJIT_Op<"global_var"> {
     (`tls_model` `(` $tls_model^ `)`)?
     (`link_section` `(` $link_section^ `)`)?
     (`visibility` `(` $visibility^ `)`)?
-    custom<GlobalInitializer>($initializer, $body) `:` type($var) attr-dict
+    custom<GlobalInitializer>($initializer, $body) `:` $type attr-dict
   }];
 }
 

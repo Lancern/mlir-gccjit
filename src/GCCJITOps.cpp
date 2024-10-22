@@ -201,12 +201,76 @@ void printSwitchOpCases(
 
 ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
                                    Region &body) {
-  llvm_unreachable("not implemented");
+  std::string keyword;
+  if (parser.parseOptionalKeywordOrString(&keyword).succeeded()) {
+    if (keyword == "literal") {
+      if (parser.parseLParen())
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected '(' after 'literal'");
+      StringInitializerAttr stringInitializer;
+      if (parser.parseCustomAttributeWithFallback(stringInitializer))
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected string initializer");
+      initializer = stringInitializer;
+      if (parser.parseRParen())
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected ')' after string initializer");
+      return success();
+    }
+
+    if (keyword == "array") {
+      if (parser.parseLParen())
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected '(' after 'array'");
+      ByteArrayInitializerAttr byteArrayInitializer;
+      if (parser.parseCustomAttributeWithFallback(byteArrayInitializer))
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected byte array initializer");
+      initializer = byteArrayInitializer;
+      if (parser.parseRParen())
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected ')' after byte array initializer");
+      return success();
+    }
+
+    if (keyword == "init") {
+      if (parser.parseRegion(body))
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected initializer region");
+      return success();
+    }
+
+    return parser.emitError(parser.getCurrentLocation(),
+                            "unknown initializer kind: ")
+           << keyword;
+  }
+  // There is no initializer.
+  return success();
 }
 
 void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
                             Attribute initializer, Region &body) {
-  llvm_unreachable("not implemented");
+  if (auto stringInitializer =
+          dyn_cast_if_present<StringInitializerAttr>(initializer)) {
+    p << "literal(";
+    p.printStrippedAttrOrType(stringInitializer);
+    p << ")";
+    return;
+  }
+
+  if (auto byteArrayInitializer =
+          dyn_cast_if_present<ByteArrayInitializerAttr>(initializer)) {
+    p << "array(";
+    p.printStrippedAttrOrType(byteArrayInitializer);
+    p << ")";
+    return;
+  }
+
+  if (!body.empty()) {
+    p << "init ";
+    p.printRegion(body);
+    return;
+  }
 }
 
 } // namespace
