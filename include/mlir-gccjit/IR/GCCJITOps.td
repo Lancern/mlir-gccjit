@@ -123,18 +123,21 @@ def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp
 }
 
 //===----------------------------------------------------------------------===//
-// ZeroOp
+// ConstantOp
 //===----------------------------------------------------------------------===//
-def ZeroOp : GCCJIT_Op<"zero"> {
-  let summary = "Zero value";
+def ConstantOp : GCCJIT_Op<"const", [ConstantLike, Pure,
+                                     AllTypesMatch<["value", "result"]>]> {
+  let summary = "A constant value";
   let description = [{
-    The "zero" operation represents a constant zero value.
-    The operation takes no operands and produces a single result.
+    The `gccjit.const` operation creates a constant rvalue for the constant
+    value specified by the parameter.
   }];
+
+  let arguments = (ins TypedAttrInterface:$value);
   let results = (outs AnyType:$result);
-  let assemblyFormat = [{
-    `:` type($result) attr-dict
-  }];
+
+  let assemblyFormat = "$value attr-dict";
+
   let hasVerifier = 1;
 }
 

@@ -238,11 +238,11 @@ LogicalResult ReturnOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// ZeroOp
+// ConstantOp
 //===----------------------------------------------------------------------===//
-LogicalResult ZeroOp::verify() {
-  if (!isArithmetc(getType()))
-    return emitOpError("operand should be an arithmetic type");
+LogicalResult ConstantOp::verify() {
+  if (isa<LValueType>(getValue().getType()))
+    return emitOpError("value cannot be an lvalue type");
   return success();
 }
 
