@@ -213,6 +213,76 @@ def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
   let hasCustomAssemblyFormat = 1;
   let genVerifyDecl = 0;
 }
+
+//===----------------------------------------------------------------------===//
+// RegName Attr
+//===----------------------------------------------------------------------===//
+def RegNameAttr : GCCJIT_Attr<"RegName", "reg_name"> {
+  let summary = "Register name";
+  let parameters = (ins "StringAttr":$name);
+  let description = [{
+    Represents the register name.
+  }];
+  let assemblyFormat = [{
+    $name
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// LinkSection Attr
+//===----------------------------------------------------------------------===//
+def LinkSectionAttr : GCCJIT_Attr<"LinkSection", "link_section"> {
+  let summary = "Link section";
+  let parameters = (ins "StringAttr":$section);
+  let description = [{
+    Represents the link section.
+  }];
+  let assemblyFormat = [{
+    $section
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Visibility Attr
+//===----------------------------------------------------------------------===//
+def VisibilityAttr : GCCJIT_Attr<"Visibility", "visibility"> {
+  let summary = "Visibility";
+  let parameters = (ins "StringAttr":$visibility);
+  let description = [{
+    Represents the visibility.
+  }];
+  let assemblyFormat = [{
+    $visibility
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// StringInitializer Attr
+//===----------------------------------------------------------------------===//
+def StringInitializerAttr : GCCJIT_Attr<"StringInitializer", "string_initializer"> {
+  let summary = "String initializer";
+  let parameters = (ins "StringAttr":$initializer);
+  let description = [{
+    Represents the string initializer.
+  }];
+  let assemblyFormat = [{
+    $initializer
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// ByteArrayInitializer Attr
+//===----------------------------------------------------------------------===//
+def ByteArrayInitializerAttr : GCCJIT_Attr<"ByteArrayInitializer", "byte_array_initializer"> {
+  let summary = "Byte array initializer";
+  let parameters = (ins "DenseI8ArrayAttr":$initializer);
+  let description = [{
+    Represents the byte array initializer.
+  }];
+  let assemblyFormat = [{
+    $initializer
+  }];
+}
 #endif // MLIR_GCCJIT_IR_GCCJIT_ATTRS
 
 

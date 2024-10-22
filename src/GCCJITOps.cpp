@@ -19,6 +19,7 @@
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
+#include "mlir/IR/Attributes.h"
 #include "mlir/IR/BlockSupport.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -196,6 +197,16 @@ void printSwitchOpCases(
     p.printSuccessor(dest);
   }
   p.printNewline();
+}
+
+ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
+                                   Region &body) {
+  llvm_unreachable("not implemented");
+}
+
+void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
+                            Attribute initializer, Region &body) {
+  llvm_unreachable("not implemented");
 }
 
 } // namespace

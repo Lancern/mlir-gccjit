@@ -276,5 +276,55 @@ def EvalOp : GCCJIT_Op<"eval"> {
   }];
   let hasVerifier = 1;
 }
+//===----------------------------------------------------------------------===//
+// LocalOp
+//===----------------------------------------------------------------------===//
+def LocalOp : GCCJIT_Op<"local_var", [ParentOneOf<["FuncOp"]>]> {
+  let summary = "Declare a local variable";
+  let description = [{
+    The "local_var" operation declares a local variable.
+  }];
+  let arguments = (ins 
+    OptionalAttr<RegNameAttr>:$reg_name,
+    OptionalAttr<IndexAttr>:$alignment,
+    OptionalAttr<TLSModelAttr>:$tls_model
+  );
+  let results = (outs GCCJIT_LValueType:$var);
+  let assemblyFormat = [{
+    (`reg` `(` $reg_name^ `)`)?
+    (`align` `(` $alignment^ `)`)?
+    (`tls_model` `(` $tls_model^ `)`)?
+    `:` type($var) attr-dict
+  }];
+}
+//===----------------------------------------------------------------------===//
+// GlobalOp
+//===----------------------------------------------------------------------===//
+def GlobalOp : GCCJIT_Op<"global_var"> {
+  let summary = "Declare a global variable";
+  let description = [{
+    The "global_var" operation declares a global variable.
+  }];
+  let arguments = (ins 
+    SymbolNameAttr:$sym_name,
+    OptionalAttr<RegNameAttr>:$reg_name,
+    OptionalAttr<IndexAttr>:$alignment,
+    OptionalAttr<TLSModelAttr>:$tls_model,
+    OptionalAttr<LinkSectionAttr>:$link_section,
+    OptionalAttr<VisibilityAttr>:$visibility,
+    OptionalAttr<AnyAttr>:$initializer
+  );
+  let results = (outs GCCJIT_LValueType:$var);
+  let regions = (region AnyRegion:$body);
+  let assemblyFormat = [{
+    $sym_name
+    (`reg` `(` $reg_name^ `)`)?
+    (`align` `(` $alignment^ `)`)?
+    (`tls_model` `(` $tls_model^ `)`)?
+    (`link_section` `(` $link_section^ `)`)?
+    (`visibility` `(` $visibility^ `)`)?
+    custom<GlobalInitializer>($initializer, $body) `:` type($var) attr-dict
+  }];
+}
 
 #endif // GCCJIT_OPS
