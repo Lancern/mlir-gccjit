@@ -16,6 +16,7 @@
 #include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
+#include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -128,6 +129,17 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
                     return gcc_jit_context_get_type(impl->getContext(),
                                                     GCC_JIT_TYPE_VOID);
                   })
+                  .Case([&](gccjit::ArrayType t) {
+                    auto *elemType = convertType(t.getElementType());
+                    auto size = t.getSize();
+                    return gcc_jit_context_new_array_type(
+                        impl->getContext(), nullptr, elemType, size);
+                  })
+                  .Case([&](gccjit::VectorType t) {
+                    auto *elemType = convertType(t.getElementType());
+                    auto size = t.getNumUnits();
+                    return gcc_jit_type_get_vector(elemType, size);
+                  })
                   .Default([](mlir::Type) { return nullptr; });
   typeMap[type] = res;
   return res;
@@ -185,6 +197,90 @@ gcc_jit_function_kind Translator::convertFnKind(FnKind kind) {
   }
 }
 
+static void processFunctionAttrs(gccjit::FuncOp func,
+                                 gcc_jit_function *handle) {
+  for (auto attr : func.getGccjitFnAttrs()) {
+    auto fnAttr = cast<FunctionAttr>(attr);
+    switch (fnAttr.getAttr().getValue()) {
+    case FnAttrEnum::Alias:
+      gcc_jit_function_add_string_attribute(handle, GCC_JIT_FN_ATTRIBUTE_ALIAS,
+                                            fnAttr.getStrValue().str().c_str());
+      break;
+    case FnAttrEnum::AlwaysInline:
+      gcc_jit_function_add_attribute(handle,
+                                     GCC_JIT_FN_ATTRIBUTE_ALWAYS_INLINE);
+      break;
+    case FnAttrEnum::Inline:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_INLINE);
+      break;
+    case FnAttrEnum::NoInline:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_NOINLINE);
+      break;
+    case FnAttrEnum::Target:
+      gcc_jit_function_add_string_attribute(handle, GCC_JIT_FN_ATTRIBUTE_TARGET,
+                                            fnAttr.getStrValue().str().c_str());
+      break;
+    case FnAttrEnum::Used:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_USED);
+      break;
+    case FnAttrEnum::Visibility:
+      gcc_jit_function_add_string_attribute(handle,
+                                            GCC_JIT_FN_ATTRIBUTE_VISIBILITY,
+                                            fnAttr.getStrValue().str().c_str());
+      break;
+    case FnAttrEnum::Cold:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_COLD);
+      break;
+    case FnAttrEnum::ReturnsTwice:
+      gcc_jit_function_add_attribute(handle,
+                                     GCC_JIT_FN_ATTRIBUTE_RETURNS_TWICE);
+      break;
+    case FnAttrEnum::Pure:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_PURE);
+      break;
+    case FnAttrEnum::Const:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_CONST);
+      break;
+    case FnAttrEnum::Weak:
+      gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_WEAK);
+      break;
+    case FnAttrEnum::Nonnull:
+      gcc_jit_function_add_integer_array_attribute(
+          handle, GCC_JIT_FN_ATTRIBUTE_NONNULL,
+          reinterpret_cast<const int *>(
+              fnAttr.getIntArrayValue().asArrayRef().data()),
+          fnAttr.getIntArrayValue().size());
+      break;
+    }
+  }
+}
+
+static gcc_jit_global_kind convertGlobalKind(GlbKind kind) {
+  switch (kind) {
+  case GlbKind::Exported:
+    return GCC_JIT_GLOBAL_EXPORTED;
+  case GlbKind::Internal:
+    return GCC_JIT_GLOBAL_INTERNAL;
+  case GlbKind::Imported:
+    return GCC_JIT_GLOBAL_IMPORTED;
+  }
+}
+
+static gcc_jit_tls_model convertTLSModel(TLSModelEnum model) {
+  switch (model) {
+  case TLSModelEnum::GlobalDynamic:
+    return GCC_JIT_TLS_MODEL_GLOBAL_DYNAMIC;
+  case TLSModelEnum::LocalDynamic:
+    return GCC_JIT_TLS_MODEL_LOCAL_DYNAMIC;
+  case TLSModelEnum::InitialExec:
+    return GCC_JIT_TLS_MODEL_INITIAL_EXEC;
+  case TLSModelEnum::LocalExec:
+    return GCC_JIT_TLS_MODEL_LOCAL_EXEC;
+  case TLSModelEnum::None:
+    return GCC_JIT_TLS_MODEL_NONE;
+  }
+}
+
 void Translator::declareAllFunctionAndGlobals() {
   moduleOp.walk([&](gccjit::FuncOp func) {
     auto type = func.getFunctionType();
@@ -207,8 +303,52 @@ void Translator::declareAllFunctionAndGlobals() {
     auto *funcHandle = gcc_jit_context_new_function(
         ctxt, getLocation(func.getLoc()), kind, returnType, name.c_str(),
         paramTypes.size(), params.data(), type.isVarArg());
+    processFunctionAttrs(func, funcHandle);
     SymbolRefAttr symRef = SymbolRefAttr::get(getMLIRContext(), name);
     functionMap[symRef] = {funcHandle, std::move(params)};
+  });
+  moduleOp.walk([&](gccjit::GlobalOp global) {
+    auto type = global.getType();
+    auto *typeHandle = typeConverter.convertType(type);
+    auto name = global.getSymName().str();
+    auto nameAttr = SymbolRefAttr::get(getMLIRContext(), name);
+    auto kind = convertGlobalKind(global.getGlbKind());
+    auto *globalHandle = gcc_jit_context_new_global(
+        ctxt, getLocation(global.getLoc()), kind, typeHandle, name.c_str());
+    globalMap[nameAttr] = globalHandle;
+    if (auto regName = global.getRegName())
+      gcc_jit_lvalue_set_register_name(globalHandle,
+                                       regName->getName().str().c_str());
+    if (auto alignment = global.getAlignment())
+      gcc_jit_lvalue_set_alignment(globalHandle, alignment->getZExtValue());
+    if (auto tlsModel = global.getTlsModel())
+      gcc_jit_lvalue_set_tls_model(
+          globalHandle, convertTLSModel(tlsModel->getModel().getValue()));
+    if (auto linkSection = global.getLinkSection())
+      gcc_jit_lvalue_set_link_section(globalHandle,
+                                      linkSection->getSection().str().c_str());
+    if (auto visibility = global.getVisibility())
+      gcc_jit_lvalue_add_string_attribute(
+          globalHandle, GCC_JIT_VARIABLE_ATTRIBUTE_VISIBILITY,
+          visibility->getVisibility().str().c_str());
+    if (auto initializer = global.getInitializer()) {
+      llvm::TypeSwitch<Attribute>(*initializer)
+          .Case([&](StringInitializerAttr attr) {
+            auto str = attr.getInitializer();
+            auto blob = str.str();
+            gcc_jit_global_set_initializer(globalHandle, blob.c_str(),
+                                           blob.size() + 1);
+          })
+          .Case([&](ByteArrayInitializerAttr attr) {
+            auto data = attr.getInitializer().asArrayRef();
+            gcc_jit_global_set_initializer(globalHandle, data.data(),
+                                           data.size());
+          })
+          .Default([](Attribute) { llvm_unreachable("unknown initializer"); });
+    }
+    if (!global.getBody().empty()) {
+      // TODO
+    }
   });
 }
 

@@ -179,4 +179,34 @@ def GCCJIT_ComplexType : GCCJIT_Type<"Complex", "complex"> {
   let hasCustomAssemblyFormat = 1;
 }
 
+//===----------------------------------------------------------------------===//
+// Array type
+//===----------------------------------------------------------------------===//
+def GCCJIT_ArrayType : GCCJIT_Type<"Array", "array"> {
+  let summary = "GCCJIT array type";
+  let description = [{
+    The `!gccjit.array` type represents an array type. It consists of a single
+    element type and a constant length.
+  }];
+  let parameters = (ins "mlir::Type":$elementType, "unsigned":$size);
+  let assemblyFormat = [{
+    `<` $elementType `,` $size `>`
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Vector type
+//===----------------------------------------------------------------------===//
+def GCCJIT_VectorType : GCCJIT_Type<"Vector", "vector"> {
+  let summary = "GCCJIT vector type";
+  let description = [{
+    The `!gccjit.vector` type represents a vector type. It consists of a single
+    element type and a constant length.
+  }];
+  let parameters = (ins "mlir::Type":$elementType, "unsigned":$numUnits);
+  let assemblyFormat = [{
+    `<` $elementType `,` $numUnits `>`
+  }];
+}
+
 #endif // GCCJIT_TYPES

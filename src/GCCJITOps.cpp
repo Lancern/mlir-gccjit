@@ -51,23 +51,6 @@ using namespace mlir::gccjit;
 // GCCJIT Custom Parser/Printer for Operations
 //===----------------------------------------------------------------------===//
 namespace {
-
-ParseResult parseFunctionKind(OpAsmParser &parser, FnKindAttr &fnKind) {
-  std::string kind;
-  if (parser.parseOptionalKeywordOrString(&kind))
-    return parser.emitError(parser.getNameLoc(), "expected function kind");
-  std::optional<FnKind> kindEnum = symbolizeFnKind(kind);
-  if (!kindEnum)
-    return parser.emitError(parser.getNameLoc(), "unknown function kind: ")
-           << kind;
-  fnKind = FnKindAttr::get(parser.getContext(), *kindEnum);
-  return success();
-}
-
-void printFunctionKind(OpAsmPrinter &p, Operation *, FnKindAttr fnKind) {
-  p << stringifyFnKind(fnKind.getValue());
-}
-
 ParseResult parseFunctionAttrs(OpAsmParser &parser, ArrayAttr &fnAttrs) {
   if (parser.parseOptionalKeyword("attrs").succeeded()) {
     if (parser.parseLParen())

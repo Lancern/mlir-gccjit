@@ -69,7 +69,7 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
   let hasVerifier = 1;
 
   let assemblyFormat = [{
-    custom<FunctionKind>($fn_kind)
+    $fn_kind
     $sym_name
     custom<FunctionType>($function_type)
     custom<FunctionAttrs>($gccjit_fn_attrs)
@@ -297,15 +297,27 @@ def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
     `:` type($var) attr-dict
   }];
 }
+
 //===----------------------------------------------------------------------===//
 // GlobalOp
 //===----------------------------------------------------------------------===//
-def GlobalOp : GCCJIT_Op<"global"> {
+def GLBKIND_EXPORTED : I32EnumAttrCase<"Exported", 0, "exported">;
+def GLBKIND_INTERNAL : I32EnumAttrCase<"Internal", 1, "internal">;
+def GLBKIND_IMPORTED : I32EnumAttrCase<"Imported", 2, "imported">;
+
+def GlbKind : I32EnumAttr<"GlbKind", "global kind", [
+  GLBKIND_EXPORTED, GLBKIND_INTERNAL, GLBKIND_IMPORTED
+]> {
+  let cppNamespace = "::mlir::gccjit";
+}
+
+def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
   let summary = "Declare a global variable";
   let description = [{
     The "global_var" operation declares a global variable.
   }];
   let arguments = (ins 
+    GlbKind:$glb_kind,
     SymbolNameAttr:$sym_name,
     TypeAttrOf<GCCJIT_LValueType>:$type,
     OptionalAttr<RegNameAttr>:$reg_name,
@@ -317,6 +329,7 @@ def GlobalOp : GCCJIT_Op<"global"> {
   );
   let regions = (region AnyRegion:$body);
   let assemblyFormat = [{
+    $glb_kind
     $sym_name
     (`reg` `(` $reg_name^ `)`)?
     (`align` `(` $alignment^ `)`)?
