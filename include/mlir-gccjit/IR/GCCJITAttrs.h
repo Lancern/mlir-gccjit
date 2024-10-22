@@ -21,4 +21,41 @@
 #define GET_ATTRDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsAttributes.h.inc"
 
+namespace mlir::gccjit {
+inline bool isUnitFnAttr(FnAttrEnum attr) {
+  switch (attr) {
+  case FnAttrEnum::AlwaysInline:
+  case FnAttrEnum::Inline:
+  case FnAttrEnum::NoInline:
+  case FnAttrEnum::Used:
+  case FnAttrEnum::Cold:
+  case FnAttrEnum::ReturnsTwice:
+  case FnAttrEnum::Pure:
+  case FnAttrEnum::Const:
+  case FnAttrEnum::Weak:
+    return true;
+  default:
+    return false;
+  }
+}
+inline bool isStringFnAttr(FnAttrEnum attr) {
+  switch (attr) {
+  case FnAttrEnum::Alias:
+  case FnAttrEnum::Target:
+    return true;
+  default:
+    return false;
+  }
+}
+
+inline bool isIntArrayFnAttr(FnAttrEnum attr) {
+  switch (attr) {
+  case FnAttrEnum::Nonnull:
+    return true;
+  default:
+    return false;
+  }
+}
+} // namespace mlir::gccjit
+
 #endif // MLIR_GCCJIT_IR_GCCJIT_OPS_ATTRS_H

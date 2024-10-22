@@ -170,6 +170,49 @@ def OptLevelAttr : GCCJIT_Attr<"OptLevel", "opt_level"> {
   let genVerifyDecl = 0;
 }
 
+//===----------------------------------------------------------------------===//
+// Function Attributes
+//===----------------------------------------------------------------------===//
+def FnAttr_Alias : I32EnumAttrCase<"Alias", 0, "alias">;
+def FnAttr_AlwaysInline : I32EnumAttrCase<"AlwaysInline", 1, "always_inline">;
+def FnAttr_Inline : I32EnumAttrCase<"Inline", 2, "inline">;
+def FnAttr_NoInline : I32EnumAttrCase<"NoInline", 3, "noinline">;
+def FnAttr_Target : I32EnumAttrCase<"Target", 4, "target">;
+def FnAttr_Used : I32EnumAttrCase<"Used", 5, "used">;
+def FnAttr_Visibility : I32EnumAttrCase<"Visibility", 6, "visibility">;
+def FnAttr_Cold : I32EnumAttrCase<"Cold", 7, "cold">;
+def FnAttr_ReturnsTwice : I32EnumAttrCase<"ReturnsTwice", 8, "returns_twice">;
+def FnAttr_Pure : I32EnumAttrCase<"Pure", 9, "pure">;
+def FnAttr_Const : I32EnumAttrCase<"Const", 10, "const">;
+def FnAttr_Weak : I32EnumAttrCase<"Weak", 11, "weak">;
+def FnAttr_Nonnull : I32EnumAttrCase<"Nonnull", 12, "nonnull">;
+def FnAttrEnum : I32EnumAttr<"FnAttrEnum", "Function attribute",
+                          [FnAttr_Alias, FnAttr_AlwaysInline, FnAttr_Inline,
+                           FnAttr_NoInline, FnAttr_Target, FnAttr_Used,
+                           FnAttr_Visibility, FnAttr_Cold, FnAttr_ReturnsTwice,
+                           FnAttr_Pure, FnAttr_Const, FnAttr_Weak, FnAttr_Nonnull]> {
+  let cppNamespace = "mlir::gccjit";
+}
+
+def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
+  let summary = "Function Attribute"; 
+  let description = [{
+    A `#gccjit.fn_attr` attribute represents a function attribute.
+    There three types of function attributes:
+    - unit attributes: those without a value.
+    - string attributes: those with a string value.
+    - integer array attributes: those with an array of integers.
+  }];
+
+  let parameters = (ins 
+    "FnAttrEnumAttr":$attr,
+    OptionalParameter<"::mlir::StringAttr">:$strValue,
+    OptionalParameter<"::mlir::DenseI32ArrayAttr">:$intArrayValue
+  );
+
+  let hasCustomAssemblyFormat = 1;
+  let genVerifyDecl = 0;
+}
 #endif // MLIR_GCCJIT_IR_GCCJIT_ATTRS
 
 

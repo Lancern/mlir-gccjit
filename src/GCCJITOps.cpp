@@ -187,10 +187,10 @@ void printSwitchOpCases(
        llvm::zip(lowerbound, upperbound, caseDestinations)) {
     p << ",";
     p.printNewline();
-    p.printStrippedAttrOrType(cast<gccjit::IntAttr>(lower));
+    p.printAttribute(lower);
     if (lower != upper) {
       p << "...";
-      p.printStrippedAttrOrType(cast<gccjit::IntAttr>(upper));
+      p.printAttribute(upper);
     }
     p << " -> ";
     p.printSuccessor(dest);
@@ -228,6 +228,11 @@ LogicalResult gccjit::FuncOp::verify() {
       return emitOpError(
           "entry block argument type should match function argument type");
   }
+
+  for (auto attr : getGccjitFnAttrs())
+    if (!isa<FunctionAttr>(attr))
+      return emitOpError("function attribute should be of FunctionAttr type");
+
   return success();
 }
 

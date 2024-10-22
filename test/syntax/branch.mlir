@@ -15,8 +15,8 @@ module @test {
             %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!long> to !long
             gccjit.switch (%0 : !long) {
                 default -> ^default,
-                #gccjit.int<long, 5> -> ^case1,
-                #gccjit.int<long, 10>...#gccjit.int<long, 20> -> ^case2
+                #gccjit.int<5> : !long -> ^case1,
+                #gccjit.int<10> : !long ...#gccjit.int<20> : !long -> ^case2
             }
         ^case1:
             gccjit.return

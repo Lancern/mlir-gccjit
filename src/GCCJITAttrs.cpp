@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
+#include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
@@ -89,9 +91,13 @@ void TLSModelAttr::print(AsmPrinter &printer) const {
 //===----------------------------------------------------------------------===//
 
 Attribute IntAttr::parse(AsmParser &parser, Type odsType) {
-  auto intType = mlir::dyn_cast<IntType>(odsType);
-  if (!intType)
+  auto intType = mlir::dyn_cast_if_present<IntType>(odsType);
+
+  if (!intType) {
+    parser.emitError(parser.getCurrentLocation(),
+                     "expected integer type for #gccjit.int attribute");
     return {};
+  }
 
   // Consume the '<' symbol.
   if (parser.parseLess())
@@ -198,6 +204,67 @@ Attribute OptLevelAttr::parse(AsmParser &parser, Type odsType) {
 
 void OptLevelAttr::print(AsmPrinter &printer) const {
   printer << "<" << getLevel().getValue() << '>';
+}
+
+//===----------------------------------------------------------------------===//
+// FunctionAttr definitions
+//===----------------------------------------------------------------------===//
+Attribute FunctionAttr::parse(AsmParser &parser, Type odsType) {
+  llvm::SMLoc loc = parser.getCurrentLocation();
+  if (parser.parseLess())
+    return {};
+
+  std::string keyword;
+  if (parser.parseKeywordOrString(&keyword)) {
+    parser.emitError(loc) << "expected attribute kind";
+    return {};
+  }
+
+  std::optional<FnAttrEnum> kind = symbolizeFnAttrEnum(keyword);
+  if (!kind.has_value()) {
+    parser.emitError(loc) << "unknown function attribute kind: " << keyword;
+    return {};
+  }
+
+  auto kindAttr = FnAttrEnumAttr::get(parser.getContext(), kind.value());
+
+  if (isUnitFnAttr(kindAttr.getValue())) {
+    if (parser.parseGreater())
+      return {};
+    return FunctionAttr::get(parser.getContext(), kindAttr, {}, {});
+  }
+
+  if (parser.parseComma())
+    return {};
+
+  if (isStringFnAttr(kindAttr.getValue())) {
+    StringAttr strValue;
+    if (parser.parseAttribute(strValue))
+      return {};
+    if (parser.parseGreater())
+      return {};
+    return FunctionAttr::get(parser.getContext(), kindAttr, strValue, {});
+  }
+
+  assert(isIntArrayFnAttr(kindAttr.getValue()));
+  DenseI32ArrayAttr intArrayValue;
+  if (parser.parseAttribute(intArrayValue))
+    return {};
+  if (parser.parseGreater())
+    return {};
+  return FunctionAttr::get(parser.getContext(), kindAttr, {}, intArrayValue);
+}
+
+void FunctionAttr::print(AsmPrinter &printer) const {
+  printer << "<" << getAttr().getValue();
+  if (isStringFnAttr(getAttr().getValue())) {
+    printer << ", ";
+    printer.printAttribute(getStrValue());
+  } else if (isIntArrayFnAttr(getAttr().getValue())) {
+    printer << ", ";
+    printer.printAttribute(getIntArrayValue());
+  }
+  printer << ">";
 }
 
 //===----------------------------------------------------------------------===//
