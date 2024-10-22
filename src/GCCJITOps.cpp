@@ -264,15 +264,17 @@ FlatSymbolRefAttr FuncOp::getAliasee() {
 //===----------------------------------------------------------------------===//
 
 LogicalResult ReturnOp::verify() {
-  auto funcOp = getParentOp();
-  auto funcType = funcOp.getFunctionType();
-  if (!hasReturnValue() && !funcType.isVoid())
-    return emitOpError("must have a return value matching the function type");
-  if (hasReturnValue()) {
-    if (funcType.isVoid())
-      return emitOpError("cannot have a return value for a void function");
-    if (funcType.getReturnType() != getValue().getType())
-      return emitOpError("return type mismatch");
+  auto *parent = this->getOperation()->getParentOp();
+  if (auto funcOp = dyn_cast<FuncOp>(parent)) {
+    auto funcType = funcOp.getFunctionType();
+    if (!hasReturnValue() && !funcType.isVoid())
+      return emitOpError("must have a return value matching the function type");
+    if (hasReturnValue()) {
+      if (funcType.isVoid())
+        return emitOpError("cannot have a return value for a void function");
+      if (funcType.getReturnType() != getValue().getType())
+        return emitOpError("return type mismatch");
+    }
   }
   return success();
 }

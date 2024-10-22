@@ -96,7 +96,7 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
 //===----------------------------------------------------------------------===//
 // ReturnOp
 //===----------------------------------------------------------------------===//
-def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp"]>]> {
+def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp", "GlobalOp"]>]> {
   let summary = "Return from function";
   let description = [{
     The "return" operation represents a return operation within a function.
