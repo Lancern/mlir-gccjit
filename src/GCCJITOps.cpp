@@ -51,6 +51,7 @@ using namespace mlir::gccjit;
 // GCCJIT Custom Parser/Printer for Operations
 //===----------------------------------------------------------------------===//
 namespace {
+
 ParseResult parseFunctionKind(OpAsmParser &parser, FnKindAttr &fnKind) {
   std::string kind;
   if (parser.parseOptionalKeywordOrString(&kind))
@@ -61,9 +62,11 @@ ParseResult parseFunctionKind(OpAsmParser &parser, FnKindAttr &fnKind) {
   fnKind = FnKindAttr::get(parser.getContext(), *kindEnum);
   return success();
 }
+
 void printFunctionKind(OpAsmPrinter &p, Operation *, FnKindAttr fnKind) {
   p << stringifyFnKind(fnKind.getValue());
 }
+
 ParseResult parseFunctionAttrs(OpAsmParser &parser, ArrayAttr &fnAttrs) {
   if (parser.parseOptionalKeyword("attrs").succeeded()) {
     if (parser.parseLParen())
@@ -75,6 +78,7 @@ ParseResult parseFunctionAttrs(OpAsmParser &parser, ArrayAttr &fnAttrs) {
   fnAttrs = ArrayAttr::get(parser.getContext(), {});
   return success();
 }
+
 void printFunctionAttrs(OpAsmPrinter &p, Operation *, ArrayAttr fnAttrs) {
   if (fnAttrs && !fnAttrs.empty()) {
     p << "attrs(";
@@ -82,6 +86,7 @@ void printFunctionAttrs(OpAsmPrinter &p, Operation *, ArrayAttr fnAttrs) {
     p << ")";
   }
 }
+
 ParseResult parseFunctionType(OpAsmParser &parser, TypeAttr &type) {
   Type retType;
   llvm::SmallVector<mlir::Type> params{};
@@ -100,6 +105,7 @@ ParseResult parseFunctionType(OpAsmParser &parser, TypeAttr &type) {
   type = TypeAttr::get(funcType);
   return success();
 }
+
 void printFunctionType(OpAsmPrinter &p, Operation *, TypeAttr type) {
   auto funcType = cast<FuncType>(type.getValue());
   p << "(";
@@ -109,10 +115,12 @@ void printFunctionType(OpAsmPrinter &p, Operation *, TypeAttr type) {
     p.printType(funcType.getReturnType());
   }
 }
+
 ParseResult parseFunctionBody(OpAsmParser &parser, Region &region) {
   (void)parser.parseOptionalRegion(region);
   return success();
 }
+
 void printFunctionBody(OpAsmPrinter &p, Operation *op, Region &region) {
   if (!region.empty())
     p.printRegion(region);

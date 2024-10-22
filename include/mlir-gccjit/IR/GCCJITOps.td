@@ -38,7 +38,7 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
       Unlike func.func or llvm.func, parameters of a function are treated as
       lvalues in GCCJIT. Hence, `gccjit.func` only accepts regions with lvalue
       arguments if any parameter is present.
-      
+
       ```
       gccjit.func exported @foo (i32, i32) -> i32 {
         ^entry(%arg0 : !gccjit.lvalue<i32>, %arg1 : !gccjit.lvalue<i32>):
@@ -57,8 +57,8 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
         - Imported: The function is imported from another module.
         - AlwaysInline: The function is always inlined.
     }];
-    let arguments = (ins 
-    SymbolNameAttr:$sym_name, 
+    let arguments = (ins
+        SymbolNameAttr:$sym_name,
         FnKind:$fn_kind,
         TypeAttrOf<GCCJIT_FuncType>:$function_type,
         ArrayAttr:$gccjit_fn_attrs,
@@ -142,8 +142,8 @@ def ZeroOp : GCCJIT_Op<"zero"> {
 // JumpOp
 //===----------------------------------------------------------------------===//
 def JumpOp : GCCJIT_Op<"jump", [
-  Terminator, 
-  Pure, 
+  Terminator,
+  Pure,
   ParentOneOf<["FuncOp"]>
 ]> {
     let summary = "Unconditional jump";
@@ -165,8 +165,8 @@ def JumpOp : GCCJIT_Op<"jump", [
 // ConditionalOp
 //===----------------------------------------------------------------------===//
 def ConditionalOp : GCCJIT_Op<"conditional", [
-  Terminator, 
-  Pure, 
+  Terminator,
+  Pure,
   ParentOneOf<["FuncOp"]>
 ]> {
     let summary = "Unconditional jump";

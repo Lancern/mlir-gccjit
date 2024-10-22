@@ -30,6 +30,7 @@ namespace impl {
 struct GCCJITTypeConverter;
 struct Translator;
 } // namespace impl
+
 class Translator;
 class GCCJITTypeConverter {
   std::unique_ptr<impl::GCCJITTypeConverter> impl;
@@ -43,6 +44,7 @@ public:
   Translator &getTranslator();
   friend impl::Translator;
 };
+
 class Translator {
   std::unique_ptr<impl::Translator> impl;
 

@@ -86,6 +86,7 @@ void GCCJITTypeConverter::convertTypes(mlir::TypeRange types,
   for (auto type : types)
     result.push_back(convertType(type));
 }
+
 gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
   auto &typeMap = impl->typeMap;
   if (auto it = typeMap.find(type); it != typeMap.end())
@@ -130,14 +131,17 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
 // Translator implementation
 //===----------------------------------------------------------------------===//
 namespace [[gnu::visibility("hidden")]] impl {
+
 Translator::Translator()
     : ctxt(gcc_jit_context_acquire()), typeConverter(std::make_unique<GCCJITTypeConverter>(*this)) {
 }
+
 Translator::~Translator() {
   if (ctxt) {
     gcc_jit_context_release(ctxt);
   }
 }
+
 void Translator::populateGCCJITModuleOptions() {
   for (auto &attr : moduleOp->getAttrs()) {
     if (attr.getName() == "gccjit.prog_name") {
