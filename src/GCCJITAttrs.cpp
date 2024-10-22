@@ -86,45 +86,31 @@ void TLSModelAttr::print(AsmPrinter &printer) const {
 //===----------------------------------------------------------------------===//
 
 Attribute IntAttr::parse(AsmParser &parser, Type odsType) {
-  mlir::APInt storage;
-  bool isLong = false;
+  auto intType = mlir::dyn_cast<IntType>(odsType);
+  if (!intType)
+    return {};
 
   // Consume the '<' symbol.
   if (parser.parseLess())
     return {};
 
   // Fetch arbitrary precision integer value.
-  if (parser.parseOptionalKeyword("long").succeeded()) {
-    if (parser.parseComma())
-      return {};
-    isLong = true;
-    long value;
-    if (parser.parseInteger(value))
-      parser.emitError(parser.getCurrentLocation(), "expected integer value");
-    storage = mlir::APInt(sizeof(long) * 8, value, true);
-    if (storage.getSExtValue() != value)
-      parser.emitError(parser.getCurrentLocation(), "integer value too large for the given type");
-  } else {
-    int value;
-    if (parser.parseInteger(value))
-      parser.emitError(parser.getCurrentLocation(), "expected integer value");
-    storage = mlir::APInt(sizeof(int) * 8, value, true);
-    if (storage.getZExtValue() != static_cast<uint64_t>(value))
-      parser.emitError(parser.getCurrentLocation(), "integer value too large for the given type");
-  }
+  long value;
+  if (parser.parseInteger(value))
+    parser.emitError(parser.getCurrentLocation(), "expected integer value");
+  mlir::APInt storage(sizeof(long) * 8, value, true);
+  if (storage.getSExtValue() != value)
+    parser.emitError(parser.getCurrentLocation(), "integer value too large for the given type");
 
   // Consume the '>' symbol.
   if (parser.parseGreater())
     return {};
 
-  return IntAttr::get(parser.getContext(), storage, isLong);
+  return IntAttr::get(parser.getContext(), intType, storage);
 }
 
 void IntAttr::print(AsmPrinter &printer) const {
-  printer << "<";
-  if (getIsLong())
-    printer << "long, ";
-  printer << getValue() << '>';
+  printer << "<" << getValue() << '>';
 }
 
 //===----------------------------------------------------------------------===//
