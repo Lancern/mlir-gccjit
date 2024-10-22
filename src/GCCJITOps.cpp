@@ -236,6 +236,18 @@ LogicalResult gccjit::FuncOp::verify() {
   return success();
 }
 
+FlatSymbolRefAttr FuncOp::getAliasee() {
+  FlatSymbolRefAttr res{};
+  for (auto attr : getGccjitFnAttrs()) {
+    auto fnAttr = cast<FunctionAttr>(attr);
+    if (fnAttr.getAttr().getValue() == FnAttrEnum::Alias) {
+      res = FlatSymbolRefAttr::get(getContext(), fnAttr.getStrValue());
+      break;
+    }
+  }
+  return res;
+}
+
 //===----------------------------------------------------------------------===//
 // ReturnOp
 //===----------------------------------------------------------------------===//

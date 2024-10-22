@@ -19,6 +19,7 @@
 #include "mlir/IR/Block.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/TypeRange.h"
@@ -62,6 +63,7 @@ struct Translator {
   void declareAllFunctionAndGlobals();
   static gcc_jit_function_kind convertFnKind(FnKind kind);
   MLIRContext *getMLIRContext();
+  gcc_jit_location *getLocation(LocationAttr loc);
 };
 
 } // namespace impl
@@ -162,6 +164,10 @@ void Translator::populateGCCJITModuleOptions() {
       if (auto boolAttr = dyn_cast<BoolAttr>(attr.getValue()))
         gcc_jit_context_set_bool_allow_unreachable_blocks(ctxt,
                                                           boolAttr.getValue());
+    } else if (attr.getName() == "gccjit.debug_info") {
+      if (auto boolAttr = dyn_cast<BoolAttr>(attr.getValue()))
+        gcc_jit_context_set_bool_option(ctxt, GCC_JIT_BOOL_OPTION_DEBUGINFO,
+                                        boolAttr.getValue());
     }
   }
 }
@@ -199,7 +205,7 @@ void Translator::declareAllFunctionAndGlobals() {
                          ctxt, /*todo: location*/ nullptr, type, name.c_str());
                    });
     auto *funcHandle = gcc_jit_context_new_function(
-        ctxt, /*todo: location*/ nullptr, kind, returnType, name.c_str(),
+        ctxt, getLocation(func.getLoc()), kind, returnType, name.c_str(),
         paramTypes.size(), params.data(), type.isVarArg());
     SymbolRefAttr symRef = SymbolRefAttr::get(getMLIRContext(), name);
     functionMap[symRef] = {funcHandle, std::move(params)};
@@ -207,6 +213,25 @@ void Translator::declareAllFunctionAndGlobals() {
 }
 
 MLIRContext *Translator::getMLIRContext() { return moduleOp.getContext(); }
+
+gcc_jit_location *Translator::getLocation(LocationAttr loc) {
+  if (!loc)
+    return nullptr;
+  return llvm::TypeSwitch<LocationAttr, gcc_jit_location *>(loc)
+      .Case([&](FileLineColLoc loc) {
+        return gcc_jit_context_new_location(ctxt,
+                                            loc.getFilename().str().c_str(),
+                                            loc.getLine(), loc.getColumn());
+      })
+      .Case([&](CallSiteLoc loc) { return getLocation(loc.getCaller()); })
+      .Case(
+          [&](FusedLoc loc) { return getLocation(loc.getLocations().front()); })
+      .Case([&](NameLoc loc) { return getLocation(loc.getChildLoc()); })
+      .Case(
+          [&](OpaqueLoc loc) { return getLocation(loc.getFallbackLocation()); })
+      .Case([&](UnknownLoc loc) { return nullptr; })
+      .Default([](LocationAttr) { return nullptr; });
+}
 
 } // namespace impl
 

@@ -89,6 +89,9 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
 
     /// Checks if the function is imported.
     bool isImported() { return getFnKind() == FnKind::Imported; }
+
+    /// Get aliasee if the function is an alias.
+    FlatSymbolRefAttr getAliasee();
   }];
 }
 
