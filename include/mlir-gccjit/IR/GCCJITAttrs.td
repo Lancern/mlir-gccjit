@@ -129,6 +129,19 @@ def OneAttr : GCCJIT_Attr<"One", "one", [TypedAttrInterface]> {
   let genVerifyDecl = 1;
 }
 
+def NullAttr : GCCJIT_Attr<"Null", "null", [TypedAttrInterface]> {
+  let summary = "An attribute containing a null pointer constant";
+  let description = [{
+    A `#gccjit.null` attribute represents a constant null pointer value of some
+    libgccjit pointer type.
+  }];
+
+  let parameters = (ins
+      AttributeSelfTypeParameter<"", "mlir::gccjit::PointerType">:$type);
+
+  let assemblyFormat = "";
+}
+
 //===----------------------------------------------------------------------===//
 // OptLevel Attr
 //===----------------------------------------------------------------------===//
