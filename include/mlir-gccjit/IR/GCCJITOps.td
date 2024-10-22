@@ -73,8 +73,6 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
     $sym_name
     custom<FunctionType>($function_type)
     custom<FunctionAttrs>($gccjit_fn_attrs)
-    (`arg_attrs` `(` $arg_attrs^ `)`)?
-    (`res_attrs` `(` $res_attrs^ `)`)?
     custom<FunctionBody>($body) attr-dict
   }];
   let extraClassDeclaration = [{
