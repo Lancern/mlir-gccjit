@@ -17,12 +17,43 @@
 #include "mlir/IR/BuiltinOps.h"
 #include <libgccjit.h>
 namespace mlir::gccjit {
+
 void registerToGCCJITGimpleTranslation();
 void registerToGCCJITReproducerTranslation();
+
 struct GCCJITContextReleaser {
   void operator()(gcc_jit_context *ctxt) const { gcc_jit_context_release(ctxt); }
 };
 using GCCJITContext = std::unique_ptr<gcc_jit_context, GCCJITContextReleaser>;
+
+namespace impl {
+struct GCCJITTypeConverter;
+struct Translator;
+} // namespace impl
+class Translator;
+class GCCJITTypeConverter {
+  std::unique_ptr<impl::GCCJITTypeConverter> impl;
+
+private:
+  GCCJITTypeConverter(std::unique_ptr<impl::GCCJITTypeConverter>);
+
+public:
+  void convertTypes(mlir::TypeRange types, llvm::SmallVectorImpl<gcc_jit_type *> &result);
+  gcc_jit_type *convertType(mlir::Type type);
+  Translator &getTranslator();
+  friend impl::Translator;
+};
+class Translator {
+  std::unique_ptr<impl::Translator> impl;
+
+public:
+  gcc_jit_context *getContext() const;
+  Translator();
+  GCCJITContext takeContext();
+  GCCJITTypeConverter &getTypeConverter();
+  void translateModuleToGCCJIT(ModuleOp op);
+};
+
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op);
 } // namespace mlir::gccjit
 

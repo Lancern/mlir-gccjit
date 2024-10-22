@@ -1,5 +1,6 @@
 add_mlir_dialect_library(MLIRGTranslateToGCCJIT
     TranslateToGCCJIT.cpp
+    Registration.cpp
 
     DEPENDS
     MLIRGCCJIT
