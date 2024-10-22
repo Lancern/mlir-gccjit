@@ -25,3 +25,5 @@ add_definitions(${LLVM_DEFINITIONS})
 
 add_subdirectory(include)
 add_subdirectory(src)
+
+add_subdirectory(tools)

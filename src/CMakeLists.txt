@@ -19,5 +19,4 @@ add_mlir_dialect_library(MLIRGCCJIT
     Core
 )
 
-add_subdirectory(tools)
 add_subdirectory(Translation)
