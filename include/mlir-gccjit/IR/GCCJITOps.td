@@ -312,7 +312,7 @@ def GlobalOp : GCCJIT_Op<"global_var"> {
     OptionalAttr<TLSModelAttr>:$tls_model,
     OptionalAttr<LinkSectionAttr>:$link_section,
     OptionalAttr<VisibilityAttr>:$visibility,
-    OptionalAttr<AnyAttr>:$initializer
+    OptionalAttr<AnyAttrOf<[StringInitializerAttr, ByteArrayInitializerAttr]>>:$initializer
   );
   let results = (outs GCCJIT_LValueType:$var);
   let regions = (region AnyRegion:$body);
