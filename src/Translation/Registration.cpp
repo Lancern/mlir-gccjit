@@ -21,7 +21,6 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/LogicalResult.h"
 #include "llvm/Support/MemoryBuffer.h"
 
 namespace mlir::gccjit {
@@ -38,15 +37,15 @@ dumpContextToTempfile(gcc_jit_context *ctxt, bool reproducer) {
   return file;
 }
 
-llvm::LogicalResult copyFileToStream(llvm::sys::fs::TempFile file,
-                                     llvm::raw_ostream &os) {
+LogicalResult copyFileToStream(llvm::sys::fs::TempFile file,
+                               llvm::raw_ostream &os) {
   os.flush();
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> buffer =
       llvm::MemoryBuffer::getFile(file.TmpName);
   if (!buffer)
-    return mlir::failure();
+    return failure();
   os << buffer.get()->getBuffer();
-  return mlir::success();
+  return success();
 }
 
 void registerTranslation(llvm::StringRef name, llvm::StringRef desc,

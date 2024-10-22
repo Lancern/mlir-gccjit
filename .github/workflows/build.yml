@@ -1,0 +1,20 @@
+name: Build
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      LLVM_DIR: /usr/lib/llvm-18/cmake
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 cmake ninja-build llvm-18-dev libmlir-18-dev libgccjit-14-dev mlir-18-tools
+
+      - name: Build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 .
+          cmake --build build

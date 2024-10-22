@@ -9,9 +9,10 @@ In general you need the following tools and libraries to build `mlir-gccjit`:
 - A working C++ compiler toolchain that supports C++20 standard.
 - [CMake] with minimum version 3.22.
 - [Ninja] build system (recommended but not mandatory).
-- [LLVM] libraries and development files.
-- [MLIR] libraries and development files.
-- [libgccjit] libraries and development files.
+- [LLVM] libraries and development files. For now we have only tested LLVM-18.
+- [MLIR] libraries and development files. For now we have only tested MLIR-18.
+- [libgccjit] libraries and development files. For now we have only tested
+  libgccjit-14.
 
 [CMake]: https://cmake.org/
 [Ninja]: https://ninja-build.org/
@@ -22,7 +23,7 @@ In general you need the following tools and libraries to build `mlir-gccjit`:
 For Ubuntu 24.04 (noble) users:
 
 ```bash
-apt-get install build-essential cmake ninja-build llvm-18-dev libmlir-18-dev libgccjit-13-dev
+apt-get install build-essential cmake ninja-build llvm-18-dev libmlir-18-dev libgccjit-14-dev mlir-18-tools
 ```
 
 ## Build
