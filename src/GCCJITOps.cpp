@@ -58,7 +58,8 @@ ParseResult parseFunctionKind(OpAsmParser &parser, FnKindAttr &fnKind) {
     return parser.emitError(parser.getNameLoc(), "expected function kind");
   std::optional<FnKind> kindEnum = symbolizeFnKind(kind);
   if (!kindEnum)
-    return parser.emitError(parser.getNameLoc(), "unknown function kind: ") << kind;
+    return parser.emitError(parser.getNameLoc(), "unknown function kind: ")
+           << kind;
   fnKind = FnKindAttr::get(parser.getContext(), *kindEnum);
   return success();
 }
@@ -94,7 +95,8 @@ ParseResult parseFunctionType(OpAsmParser &parser, TypeAttr &type) {
   if (parser.parseLParen())
     return failure();
   if (parseFuncTypeArgs(parser, params, isVarArg))
-    return parser.emitError(parser.getCurrentLocation(), "failed to parse function type arguments");
+    return parser.emitError(parser.getCurrentLocation(),
+                            "failed to parse function type arguments");
   if (parser.parseOptionalArrow().succeeded()) {
     if (parser.parseType(retType))
       return failure();
@@ -134,9 +136,11 @@ void printFunctionBody(OpAsmPrinter &p, Operation *op, Region &region) {
                               $caseDestinations)
 */
 
-ParseResult parseSwitchOpCases(OpAsmParser &parser, Type /*todo: check value compatibility*/,
-                               Block *&defaultDestinationSuccessor, ArrayAttr &lowerbound,
-                               ArrayAttr &upperbound, SmallVectorImpl<Block *> &caseDestinations) {
+ParseResult parseSwitchOpCases(OpAsmParser &parser,
+                               Type /*todo: check value compatibility*/,
+                               Block *&defaultDestinationSuccessor,
+                               ArrayAttr &lowerbound, ArrayAttr &upperbound,
+                               SmallVectorImpl<Block *> &caseDestinations) {
   llvm::SmallVector<Attribute> lowerboundVec;
   llvm::SmallVector<Attribute> upperboundVec;
   if (parser.parseKeyword("default"))
@@ -144,15 +148,18 @@ ParseResult parseSwitchOpCases(OpAsmParser &parser, Type /*todo: check value com
   if (parser.parseArrow())
     return {};
   if (parser.parseSuccessor(defaultDestinationSuccessor))
-    return parser.emitError(parser.getCurrentLocation(), "expected default destination successor");
+    return parser.emitError(parser.getCurrentLocation(),
+                            "expected default destination successor");
   while (parser.parseOptionalComma().succeeded()) {
     gccjit::IntAttr lowerbound{};
     gccjit::IntAttr upperbound{};
     if (parser.parseCustomAttributeWithFallback<gccjit::IntAttr>(lowerbound))
-      return parser.emitError(parser.getCurrentLocation(), "expected lowerbound attribute");
+      return parser.emitError(parser.getCurrentLocation(),
+                              "expected lowerbound attribute");
     if (parser.parseOptionalEllipsis().succeeded()) {
       if (parser.parseCustomAttributeWithFallback<gccjit::IntAttr>(upperbound))
-        return parser.emitError(parser.getCurrentLocation(), "expected upperbound attribute");
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected upperbound attribute");
     } else
       upperbound = lowerbound;
     lowerboundVec.push_back(lowerbound);
@@ -161,7 +168,8 @@ ParseResult parseSwitchOpCases(OpAsmParser &parser, Type /*todo: check value com
       return {};
     Block *caseDestination;
     if (parser.parseSuccessor(caseDestination))
-      return parser.emitError(parser.getCurrentLocation(), "expected case destination successor");
+      return parser.emitError(parser.getCurrentLocation(),
+                              "expected case destination successor");
     caseDestinations.push_back(caseDestination);
   }
   lowerbound = ArrayAttr::get(parser.getContext(), lowerboundVec);
@@ -169,13 +177,15 @@ ParseResult parseSwitchOpCases(OpAsmParser &parser, Type /*todo: check value com
   return success();
 };
 
-void printSwitchOpCases(OpAsmPrinter &p, Operation *op,
-                        mlir::gccjit::IntType /*todo: check value compatibility*/,
-                        Block *defaultDestinationSuccessor, ArrayAttr lowerbound,
-                        ArrayAttr upperbound, SuccessorRange caseDestinations) {
+void printSwitchOpCases(
+    OpAsmPrinter &p, Operation *op,
+    mlir::gccjit::IntType /*todo: check value compatibility*/,
+    Block *defaultDestinationSuccessor, ArrayAttr lowerbound,
+    ArrayAttr upperbound, SuccessorRange caseDestinations) {
   p << "default -> ";
   p.printSuccessor(defaultDestinationSuccessor);
-  for (auto [lower, upper, dest] : llvm::zip(lowerbound, upperbound, caseDestinations)) {
+  for (auto [lower, upper, dest] :
+       llvm::zip(lowerbound, upperbound, caseDestinations)) {
     p << ",";
     p.printNewline();
     p.printStrippedAttrOrType(cast<gccjit::IntAttr>(lower));
@@ -206,15 +216,18 @@ LogicalResult gccjit::FuncOp::verify() {
       return emitOpError("external functions cannot have regions");
     return success();
   }
-  ValueTypeRange<Region::BlockArgListType> entryArgTys = getBody().getArgumentTypes();
+  ValueTypeRange<Region::BlockArgListType> entryArgTys =
+      getBody().getArgumentTypes();
   if (entryArgTys.size() != getNumArguments())
-    return emitOpError("entry block arguments count should match function arguments count");
+    return emitOpError(
+        "entry block arguments count should match function arguments count");
   for (auto [protoTy, realTy] : llvm::zip(getArgumentTypes(), entryArgTys)) {
     auto lvalueTy = dyn_cast<LValueType>(realTy);
     if (!lvalueTy)
       return emitOpError("entry block argument should have LValueType");
     if (protoTy != lvalueTy.getInnerType())
-      return emitOpError("entry block argument type should match function argument type");
+      return emitOpError(
+          "entry block argument type should match function argument type");
   }
   return success();
 }

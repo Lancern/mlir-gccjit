@@ -26,8 +26,8 @@
 
 namespace mlir::gccjit {
 namespace {
-llvm::Expected<llvm::sys::fs::TempFile> dumpContextToTempfile(gcc_jit_context *ctxt,
-                                                              bool reproducer) {
+llvm::Expected<llvm::sys::fs::TempFile>
+dumpContextToTempfile(gcc_jit_context *ctxt, bool reproducer) {
   auto file = llvm::sys::fs::TempFile::create("mlir-gccjit-%%%%%%%");
   if (!file)
     return file.takeError();
@@ -38,7 +38,8 @@ llvm::Expected<llvm::sys::fs::TempFile> dumpContextToTempfile(gcc_jit_context *c
   return file;
 }
 
-llvm::LogicalResult copyFileToStream(llvm::sys::fs::TempFile file, llvm::raw_ostream &os) {
+llvm::LogicalResult copyFileToStream(llvm::sys::fs::TempFile file,
+                                     llvm::raw_ostream &os) {
   os.flush();
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> buffer =
       llvm::MemoryBuffer::getFile(file.TmpName);
@@ -48,7 +49,8 @@ llvm::LogicalResult copyFileToStream(llvm::sys::fs::TempFile file, llvm::raw_ost
   return mlir::success();
 }
 
-void registerTranslation(llvm::StringRef name, llvm::StringRef desc, bool reproducer) {
+void registerTranslation(llvm::StringRef name, llvm::StringRef desc,
+                         bool reproducer) {
   TranslateFromMLIRRegistration registration(
       name, desc,
       [reproducer](Operation *op, raw_ostream &output) {
@@ -69,17 +71,20 @@ void registerTranslation(llvm::StringRef name, llvm::StringRef desc, bool reprod
         }
         return copyFileToStream(std::move(*file), output);
       },
-      [](DialectRegistry &registry) { registry.insert<gccjit::GCCJITDialect>(); });
+      [](DialectRegistry &registry) {
+        registry.insert<gccjit::GCCJITDialect>();
+      });
 }
 
 } // namespace
 
 void registerToGCCJITGimpleTranslation() {
-  registerTranslation("mlir-to-gccjit-gimple", "Translate MLIR to GCCJIT's GIMPLE format", false);
+  registerTranslation("mlir-to-gccjit-gimple",
+                      "Translate MLIR to GCCJIT's GIMPLE format", false);
 }
 
 void registerToGCCJITReproducerTranslation() {
-  registerTranslation("mlir-to-gccjit-reproducer", "Translate MLIR to GCCJIT's reproducer format",
-                      true);
+  registerTranslation("mlir-to-gccjit-reproducer",
+                      "Translate MLIR to GCCJIT's reproducer format", true);
 }
 } // namespace mlir::gccjit

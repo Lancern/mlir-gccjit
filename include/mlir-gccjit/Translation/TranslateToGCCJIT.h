@@ -22,7 +22,9 @@ void registerToGCCJITGimpleTranslation();
 void registerToGCCJITReproducerTranslation();
 
 struct GCCJITContextReleaser {
-  void operator()(gcc_jit_context *ctxt) const { gcc_jit_context_release(ctxt); }
+  void operator()(gcc_jit_context *ctxt) const {
+    gcc_jit_context_release(ctxt);
+  }
 };
 using GCCJITContext = std::unique_ptr<gcc_jit_context, GCCJITContextReleaser>;
 
@@ -39,7 +41,8 @@ private:
   GCCJITTypeConverter(std::unique_ptr<impl::GCCJITTypeConverter>);
 
 public:
-  void convertTypes(mlir::TypeRange types, llvm::SmallVectorImpl<gcc_jit_type *> &result);
+  void convertTypes(mlir::TypeRange types,
+                    llvm::SmallVectorImpl<gcc_jit_type *> &result);
   gcc_jit_type *convertType(mlir::Type type);
   Translator &getTranslator();
   friend impl::Translator;

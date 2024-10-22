@@ -60,7 +60,7 @@ def TLSModelAttr : GCCJIT_Attr<"TLSModel", "tls_model"> {
 // Integer Attrs
 //===----------------------------------------------------------------------===//
 def IntAttr : GCCJIT_Attr<"Int", "int", [TypedAttrInterface]> {
-  let summary = "An Attribute containing a integer value";
+  let summary = "An attribute containing a integer value";
   let description = [{
     An `#gccjit.int` attribute represents a constant integer value of some
     libgccjit integer type.
@@ -75,6 +75,58 @@ def IntAttr : GCCJIT_Attr<"Int", "int", [TypedAttrInterface]> {
     "::mlir::APInt":$value
   );
   let hasCustomAssemblyFormat = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Floating-point Attrs
+//===----------------------------------------------------------------------===//
+def FloatAttr : GCCJIT_Attr<"Float", "float", [TypedAttrInterface]> {
+  let summary = "An attribute containing a constant floating-point value";
+  let description = [{
+    A `#gccjit.float` attribute represents a constant floating-point value of
+    some libgccjit floating-point type.
+
+    Example:
+    ```mlir
+    #gccjit.float<42.0>
+    ```
+  }];
+
+  let parameters = (ins
+    AttributeSelfTypeParameter<"", "mlir::gccjit::FloatType">:$type,
+    "::mlir::APFloat":$value
+  );
+  let hasCustomAssemblyFormat = 1;
+}
+
+//===----------------------------------------------------------------------===//
+// Special constant attributes
+//===----------------------------------------------------------------------===//
+
+def ZeroAttr : GCCJIT_Attr<"Zero", "zero", [TypedAttrInterface]> {
+  let summary = "An attribute containing a constant zero";
+  let description = [{
+    A `#gccjit.zero` attribute represents a constant zero value of some
+    libgccjit integer or floating-point type.
+  }];
+
+  let parameters = (ins AttributeSelfTypeParameter<"">:$type);
+
+  let assemblyFormat = "";
+  let genVerifyDecl = 1;
+}
+
+def OneAttr : GCCJIT_Attr<"One", "one", [TypedAttrInterface]> {
+  let summary = "An attribute containing a constant one";
+  let description = [{
+    A `#gccjit.one` attribute represents a constant one value of some
+    libgccjit integer or floating-point type.
+  }];
+
+  let parameters = (ins AttributeSelfTypeParameter<"">:$type);
+
+  let assemblyFormat = "";
+  let genVerifyDecl = 1;
 }
 
 //===----------------------------------------------------------------------===//

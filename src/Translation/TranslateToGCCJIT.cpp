@@ -78,11 +78,12 @@ struct GCCJITTypeConverter {
 };
 } // namespace impl
 
-GCCJITTypeConverter::GCCJITTypeConverter(std::unique_ptr<impl::GCCJITTypeConverter> impl)
+GCCJITTypeConverter::GCCJITTypeConverter(
+    std::unique_ptr<impl::GCCJITTypeConverter> impl)
     : impl(std::move(impl)) {}
 
-void GCCJITTypeConverter::convertTypes(mlir::TypeRange types,
-                                       llvm::SmallVectorImpl<gcc_jit_type *> &result) {
+void GCCJITTypeConverter::convertTypes(
+    mlir::TypeRange types, llvm::SmallVectorImpl<gcc_jit_type *> &result) {
   for (auto type : types)
     result.push_back(convertType(type));
 }
@@ -92,7 +93,9 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
   if (auto it = typeMap.find(type); it != typeMap.end())
     return it->second;
   auto *res = llvm::TypeSwitch<mlir::Type, gcc_jit_type *>(type)
-                  .Case([&](gccjit::LValueType t) { return convertType(t.getInnerType()); })
+                  .Case([&](gccjit::LValueType t) {
+                    return convertType(t.getInnerType());
+                  })
                   .Case([&](gccjit::PointerType t) {
                     auto *pointee = convertType(t.getElementType());
                     return gcc_jit_type_get_pointer(pointee);
@@ -120,7 +123,8 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
                     return gcc_jit_context_get_type(impl->getContext(), kind);
                   })
                   .Case([&](gccjit::VoidType t) {
-                    return gcc_jit_context_get_type(impl->getContext(), GCC_JIT_TYPE_VOID);
+                    return gcc_jit_context_get_type(impl->getContext(),
+                                                    GCC_JIT_TYPE_VOID);
                   })
                   .Default([](mlir::Type) { return nullptr; });
   typeMap[type] = res;
@@ -133,8 +137,8 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
 namespace [[gnu::visibility("hidden")]] impl {
 
 Translator::Translator()
-    : ctxt(gcc_jit_context_acquire()), typeConverter(std::make_unique<GCCJITTypeConverter>(*this)) {
-}
+    : ctxt(gcc_jit_context_acquire()),
+      typeConverter(std::make_unique<GCCJITTypeConverter>(*this)) {}
 
 Translator::~Translator() {
   if (ctxt) {
@@ -146,15 +150,18 @@ void Translator::populateGCCJITModuleOptions() {
   for (auto &attr : moduleOp->getAttrs()) {
     if (attr.getName() == "gccjit.prog_name") {
       if (auto strAttr = dyn_cast<StringAttr>(attr.getValue()))
-        gcc_jit_context_set_str_option(ctxt, GCC_JIT_STR_OPTION_PROGNAME, strAttr.str().c_str());
+        gcc_jit_context_set_str_option(ctxt, GCC_JIT_STR_OPTION_PROGNAME,
+                                       strAttr.str().c_str());
     } else if (attr.getName() == "gccjit.opt_level") {
       if (auto intAttr = dyn_cast<OptLevelAttr>(attr.getValue())) {
         int optLevel = static_cast<int>(intAttr.getLevel().getValue());
-        gcc_jit_context_set_int_option(ctxt, GCC_JIT_INT_OPTION_OPTIMIZATION_LEVEL, optLevel);
+        gcc_jit_context_set_int_option(
+            ctxt, GCC_JIT_INT_OPTION_OPTIMIZATION_LEVEL, optLevel);
       }
     } else if (attr.getName() == "gccjit.allow_unreachable") {
       if (auto boolAttr = dyn_cast<BoolAttr>(attr.getValue()))
-        gcc_jit_context_set_bool_allow_unreachable_blocks(ctxt, boolAttr.getValue());
+        gcc_jit_context_set_bool_allow_unreachable_blocks(ctxt,
+                                                          boolAttr.getValue());
     }
   }
 }
@@ -182,16 +189,18 @@ void Translator::declareAllFunctionAndGlobals() {
     auto kind = convertFnKind(func.getFnKind());
     auto name = func.getSymName().str();
     auto enumerated = llvm::enumerate(paramTypes);
-    std::transform(
-        enumerated.begin(), enumerated.end(), std::back_inserter(params), [&](auto pair) {
-          auto index = pair.index();
-          auto type = pair.value();
-          auto name = llvm::Twine("arg").concat(llvm::Twine(index)).str();
-          return gcc_jit_context_new_param(ctxt, /*todo: location*/ nullptr, type, name.c_str());
-        });
-    auto *funcHandle = gcc_jit_context_new_function(ctxt, /*todo: location*/ nullptr, kind,
-                                                    returnType, name.c_str(), paramTypes.size(),
-                                                    params.data(), type.isVarArg());
+    std::transform(enumerated.begin(), enumerated.end(),
+                   std::back_inserter(params), [&](auto pair) {
+                     auto index = pair.index();
+                     auto type = pair.value();
+                     auto name =
+                         llvm::Twine("arg").concat(llvm::Twine(index)).str();
+                     return gcc_jit_context_new_param(
+                         ctxt, /*todo: location*/ nullptr, type, name.c_str());
+                   });
+    auto *funcHandle = gcc_jit_context_new_function(
+        ctxt, /*todo: location*/ nullptr, kind, returnType, name.c_str(),
+        paramTypes.size(), params.data(), type.isVarArg());
     SymbolRefAttr symRef = SymbolRefAttr::get(getMLIRContext(), name);
     functionMap[symRef] = {funcHandle, std::move(params)};
   });
@@ -207,7 +216,9 @@ GCCJITContext Translator::takeContext() {
   return GCCJITContext(ctxt);
 }
 gcc_jit_context *Translator::getContext() const { return impl->ctxt; }
-::mlir::gccjit::GCCJITTypeConverter &Translator::getTypeConverter() { return impl->typeConverter; }
+::mlir::gccjit::GCCJITTypeConverter &Translator::getTypeConverter() {
+  return impl->typeConverter;
+}
 void Translator::translateModuleToGCCJIT(ModuleOp op) {
   impl->moduleOp = op;
   impl->populateGCCJITModuleOptions();

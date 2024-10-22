@@ -57,7 +57,8 @@ Type GCCJITDialect::parseType(DialectAsmParser &parser) const {
   Type genType;
 
   // Try to parse as a tablegen'd type.
-  OptionalParseResult parseResult = generatedTypeParser(parser, &mnemonic, genType);
+  OptionalParseResult parseResult =
+      generatedTypeParser(parser, &mnemonic, genType);
   if (parseResult.has_value())
     return genType;
   // TODO: add this for custom types
@@ -74,8 +75,9 @@ void GCCJITDialect::printType(Type type, DialectAsmPrinter &os) const {
     return;
   // TODO: add this for custom types
   // Type is not tablegen'd: try printing as a raw C++ type.
-  TypeSwitch<Type>(type).Default(
-      [](Type) { llvm::report_fatal_error("printer is missing a handler for this type"); });
+  TypeSwitch<Type>(type).Default([](Type) {
+    llvm::report_fatal_error("printer is missing a handler for this type");
+  });
 }
 } // namespace mlir::gccjit
 
@@ -83,9 +85,8 @@ void GCCJITDialect::printType(Type type, DialectAsmPrinter &os) const {
 // FuncType Definitions
 //===----------------------------------------------------------------------===//
 
-mlir::ParseResult mlir::gccjit::parseFuncTypeArgs(mlir::AsmParser &p,
-                                                  llvm::SmallVector<mlir::Type> &params,
-                                                  bool &isVarArg) {
+mlir::ParseResult mlir::gccjit::parseFuncTypeArgs(
+    mlir::AsmParser &p, llvm::SmallVector<mlir::Type> &params, bool &isVarArg) {
   isVarArg = false;
   // `(` `)`
   if (succeeded(p.parseOptionalRParen()))
@@ -115,9 +116,11 @@ mlir::ParseResult mlir::gccjit::parseFuncTypeArgs(mlir::AsmParser &p,
   return p.parseRParen();
 }
 
-void mlir::gccjit::printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params,
+void mlir::gccjit::printFuncTypeArgs(mlir::AsmPrinter &p,
+                                     mlir::ArrayRef<mlir::Type> params,
                                      bool isVarArg) {
-  llvm::interleaveComma(params, p, [&p](mlir::Type type) { p.printType(type); });
+  llvm::interleaveComma(params, p,
+                        [&p](mlir::Type type) { p.printType(type); });
   if (isVarArg) {
     if (!params.empty())
       p << ", ";
@@ -164,7 +167,8 @@ mlir::Type mlir::gccjit::QualifiedType::parse(::mlir::AsmParser &odsParser) {
     } else if (qualifier == "volatile") {
       isVolatile = true;
     } else {
-      odsParser.emitError(odsParser.getCurrentLocation(), "unknown qualifier: ") << qualifier;
+      odsParser.emitError(odsParser.getCurrentLocation(), "unknown qualifier: ")
+          << qualifier;
       return {};
     }
   }
@@ -172,7 +176,8 @@ mlir::Type mlir::gccjit::QualifiedType::parse(::mlir::AsmParser &odsParser) {
   if (odsParser.parseGreater())
     return {};
 
-  return QualifiedType::get(odsParser.getContext(), elementType, isConst, isRestrict, isVolatile);
+  return QualifiedType::get(odsParser.getContext(), elementType, isConst,
+                            isRestrict, isVolatile);
 }
 
 void mlir::gccjit::QualifiedType::print(::mlir::AsmPrinter &odsPrinter) const {
@@ -230,10 +235,13 @@ mlir::Type mlir::gccjit::IntType::parse(::mlir::AsmParser &odsParser) {
 
   if (kind == GCC_JIT_TYPE_LONG || kind == GCC_JIT_TYPE_UNSIGNED_LONG)
     if (odsParser.parseOptionalKeyword("long").succeeded())
-      kind = kind == GCC_JIT_TYPE_LONG ? GCC_JIT_TYPE_LONG_LONG : GCC_JIT_TYPE_UNSIGNED_LONG_LONG;
+      kind = kind == GCC_JIT_TYPE_LONG ? GCC_JIT_TYPE_LONG_LONG
+                                       : GCC_JIT_TYPE_UNSIGNED_LONG_LONG;
 
   if (!kind.has_value()) {
-    odsParser.emitError(odsParser.getCurrentLocation(), "unknown integer type: ") << keyword;
+    odsParser.emitError(odsParser.getCurrentLocation(),
+                        "unknown integer type: ")
+        << keyword;
     return {};
   }
 
@@ -329,12 +337,14 @@ static mlir::Type parseFloatingPoint(::mlir::AsmParser &odsParser, F &&mapper,
   auto kind = switcher(keyword);
   if (kind.has_value() && *kind == GCC_JIT_TYPE_LONG_DOUBLE)
     if (odsParser.parseKeyword("double")) {
-      odsParser.emitError(odsParser.getCurrentLocation(), "expected 'double' after 'long'");
+      odsParser.emitError(odsParser.getCurrentLocation(),
+                          "expected 'double' after 'long'");
       return {};
     }
 
   if (!kind.has_value()) {
-    odsParser.emitError(odsParser.getCurrentLocation(), "unknown float type: ") << keyword;
+    odsParser.emitError(odsParser.getCurrentLocation(), "unknown float type: ")
+        << keyword;
     return {};
   }
 

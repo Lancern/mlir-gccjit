@@ -23,7 +23,6 @@
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
-#include <variant>
 
 #include "mlir-gccjit/IR/GCCJITOpsEnums.cpp.inc"
 
@@ -34,18 +33,21 @@ namespace mlir::gccjit {
 //===----------------------------------------------------------------------===//
 // General GCCJIT parsing / printing
 //===----------------------------------------------------------------------===//
-Attribute GCCJITDialect::parseAttribute(DialectAsmParser &parser, Type type) const {
+Attribute GCCJITDialect::parseAttribute(DialectAsmParser &parser,
+                                        Type type) const {
   llvm::SMLoc typeLoc = parser.getCurrentLocation();
   StringRef mnemonic;
   Attribute genAttr;
-  OptionalParseResult parseResult = generatedAttributeParser(parser, &mnemonic, type, genAttr);
+  OptionalParseResult parseResult =
+      generatedAttributeParser(parser, &mnemonic, type, genAttr);
   if (parseResult.has_value())
     return genAttr;
   parser.emitError(typeLoc, "unknown attribute in GCCJIT dialect");
   return Attribute();
 }
 
-void GCCJITDialect::printAttribute(Attribute attr, DialectAsmPrinter &os) const {
+void GCCJITDialect::printAttribute(Attribute attr,
+                                   DialectAsmPrinter &os) const {
   if (failed(generatedAttributePrinter(attr, os)))
     llvm_unreachable("unexpected GCCJIT attribute");
 }
@@ -74,7 +76,8 @@ Attribute TLSModelAttr::parse(AsmParser &parser, Type odsType) {
   if (parser.parseGreater())
     return {};
 
-  return get(parser.getContext(), TLSModelEnumAttr::get(parser.getContext(), modelEnum.value()));
+  return get(parser.getContext(),
+             TLSModelEnumAttr::get(parser.getContext(), modelEnum.value()));
 }
 
 void TLSModelAttr::print(AsmPrinter &printer) const {
@@ -100,7 +103,8 @@ Attribute IntAttr::parse(AsmParser &parser, Type odsType) {
     parser.emitError(parser.getCurrentLocation(), "expected integer value");
   mlir::APInt storage(sizeof(long) * 8, value, true);
   if (storage.getSExtValue() != value)
-    parser.emitError(parser.getCurrentLocation(), "integer value too large for the given type");
+    parser.emitError(parser.getCurrentLocation(),
+                     "integer value too large for the given type");
 
   // Consume the '>' symbol.
   if (parser.parseGreater())
@@ -110,7 +114,58 @@ Attribute IntAttr::parse(AsmParser &parser, Type odsType) {
 }
 
 void IntAttr::print(AsmPrinter &printer) const {
-  printer << "<" << getValue() << '>';
+  printer << '<' << getValue() << '>';
+}
+
+//===----------------------------------------------------------------------===//
+// FloatAttr definitions
+//===----------------------------------------------------------------------===//
+
+Attribute FloatAttr::parse(AsmParser &parser, Type odsType) {
+  auto floatType = mlir::dyn_cast<FloatType>(odsType);
+  if (!floatType)
+    return {};
+
+  // Consume the '<' symbol.
+  if (parser.parseLess())
+    return {};
+
+  // Fetch floating-point value.
+  double value;
+  if (parser.parseFloat(value))
+    parser.emitError(parser.getCurrentLocation(),
+                     "expected floating-point value");
+
+  // Consume the '>' symbol.
+  if (parser.parseGreater())
+    return {};
+
+  return FloatAttr::get(parser.getContext(), floatType, mlir::APFloat(value));
+}
+
+void FloatAttr::print(AsmPrinter &printer) const {
+  printer << '<' << getValue() << '>';
+}
+
+//===----------------------------------------------------------------------===//
+// Special value attribute definitions
+//===----------------------------------------------------------------------===//
+
+LogicalResult
+ZeroAttr::verify(llvm::function_ref<InFlightDiagnostic()> emitError,
+                 Type type) {
+  if (!mlir::isa<IntType, FloatType>(type))
+    return emitError()
+           << "#gccjit.zero must be of integer or floating-point type";
+  return success();
+}
+
+LogicalResult
+OneAttr::verify(llvm::function_ref<InFlightDiagnostic()> emitError, Type type) {
+  if (!mlir::isa<IntType, FloatType>(type))
+    return emitError()
+           << "#gccjit.one must be of integer or floating-point type";
+  return success();
 }
 
 //===----------------------------------------------------------------------===//
@@ -129,14 +184,16 @@ Attribute OptLevelAttr::parse(AsmParser &parser, Type odsType) {
   // Check if parsed value is a valid optimization level.
   auto optLevelEnum = symbolizeOptLevelEnum(level);
   if (!optLevelEnum.has_value()) {
-    parser.emitError(loc) << "invalid optimization level keyword '" << level << "'";
+    parser.emitError(loc) << "invalid optimization level keyword '" << level
+                          << "'";
     return {};
   }
 
   if (parser.parseGreater())
     return {};
 
-  return get(parser.getContext(), OptLevelEnumAttr::get(parser.getContext(), optLevelEnum.value()));
+  return get(parser.getContext(),
+             OptLevelEnumAttr::get(parser.getContext(), optLevelEnum.value()));
 }
 
 void OptLevelAttr::print(AsmPrinter &printer) const {
