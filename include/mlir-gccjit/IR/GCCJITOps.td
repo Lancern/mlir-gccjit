@@ -331,12 +331,210 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
   let assemblyFormat = [{
     $glb_kind
     $sym_name
-    (`reg` `(` $reg_name^ `)`)?
-    (`align` `(` $alignment^ `)`)?
-    (`tls_model` `(` $tls_model^ `)`)?
-    (`link_section` `(` $link_section^ `)`)?
-    (`visibility` `(` $visibility^ `)`)?
+    oilist ( 
+      `reg` `(` $reg_name `)` |
+      `align` `(` $alignment `)` |
+      `tls_model` `(` $tls_model `)` |
+      `link_section` `(` $link_section `)` |
+      `visibility` `(` $visibility `)`
+    )
     custom<GlobalInitializer>($initializer, $body) `:` $type attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// RValue Expressions
+//===----------------------------------------------------------------------===//
+// Value construction operations.
+//===----------------------------------------------------------------------===//
+
+def SizeOfOp : GCCJIT_Op<"sizeof", [Pure]> {
+  let summary = "Size of a type";
+  let description = [{
+    The "sizeof" operation returns the size of a type in bytes.
+    ```mlir
+    %size = gccjit.sizeof !gccjit.int<long double> : !gccjit.int<size_t>
+    ```
+  }];
+  let arguments = (ins TypeAttr:$type);
+  let results = (outs GCCJIT_IntType:$size);
+  let assemblyFormat = [{
+    $type `:` type($size) attr-dict
+  }];
+}
+
+def ArrayOp : GCCJIT_Op<"array"> {
+  let summary = "Construct an array";
+  let description = [{
+    The "array" operation constructs an array from a list of elements.
+    ```mlir
+    %array = gccjit.array !gccjit.array<i32, 3> [%1, %2, %3]
+    ```
+  }];
+  let arguments = (ins Variadic<AnyType>:$elements);
+  let results = (outs GCCJIT_ArrayType:$array);
+  let assemblyFormat = [{
+     type($array) `[` custom<ArrayOrVectorElements>(ref(type($array)), $elements, type($elements)) `]` attr-dict
+  }];
+}
+
+def VectorOp : GCCJIT_Op<"vector"> {
+  let summary = "Construct a vector";
+  let description = [{
+    The "vector" operation constructs a vector from a list of elements.
+    ```mlir
+    %vector = gccjit.vector !gccjit.vector<i32, 4> [%1, %2, %3, %4]
+    ```
+  }];
+  let arguments = (ins Variadic<AnyType>:$elements);
+  let results = (outs GCCJIT_VectorType:$vector);
+  let assemblyFormat = [{
+     type($vector) `[` custom<ArrayOrVectorElements>(ref(type($vector)), $elements, type($elements)) `]` attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Unary Operations
+//===----------------------------------------------------------------------===//
+
+def UOp_Minus : I32EnumAttrCase<"Minus", 0, "minus">;
+def UOp_BitwiseNegate : I32EnumAttrCase<"BitwiseNegate", 1, "bitwise_negate">;
+def UOp_LogicalNegate : I32EnumAttrCase<"LogicalNegate", 2, "logical_negate">;
+def UOp_Abs : I32EnumAttrCase<"Abs", 3, "abs">;
+def UOpAttr : I32EnumAttr<"UOp", "unary operation", [
+  UOp_Minus, UOp_BitwiseNegate, UOp_LogicalNegate, UOp_Abs
+]> {
+  let cppNamespace = "::mlir::gccjit";
+}
+
+def UnaryOp : GCCJIT_Op<"unary"> {
+  let summary = "Unary operation";
+  let description = [{
+    The "unary" operation represents a unary operation.
+    ```mlir
+    %res = gccjit.unary minus ( %operand : !gccjit.int<i32> ) : !gccjit.int<i32>
+    ```
+  }];
+  let arguments = (ins UOpAttr:$op, AnyType:$value);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $op `(` $value `:` type($value) `)` `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Binary Operations
+//===----------------------------------------------------------------------===//
+
+def BOp_Plus : I32EnumAttrCase<"Plus", 0, "plus">;
+def BOp_Minus : I32EnumAttrCase<"Minus", 1, "minus">;
+def BOp_Mult : I32EnumAttrCase<"Mult", 2, "mult">;
+def BOp_Divide : I32EnumAttrCase<"Divide", 3, "divide">;
+def BOp_Modulo : I32EnumAttrCase<"Modulo", 4, "modulo">;
+def BOp_BitwiseAnd : I32EnumAttrCase<"BitwiseAnd", 5, "bitwise_and">;
+def BOp_BitwiseOr : I32EnumAttrCase<"BitwiseXor", 6, "bitwise_xor">;
+def BOp_BitwiseXor : I32EnumAttrCase<"BitwiseOr", 7, "bitwise_or">;
+def BOp_LogicalAnd : I32EnumAttrCase<"LogicalAnd", 8, "logical_and">;
+def BOp_LogicalOr : I32EnumAttrCase<"LogicalOr", 9, "logical_or">;
+def BOp_LShift : I32EnumAttrCase<"LShift", 10, "lshift">;
+def BOp_RShift : I32EnumAttrCase<"RShift", 11, "rshift">;
+
+def BOpAttr : I32EnumAttr<"BOp", "binary operation", [
+  BOp_Plus, BOp_Minus, BOp_Mult, BOp_Divide, BOp_Modulo,
+  BOp_BitwiseAnd, BOp_BitwiseOr, BOp_BitwiseXor,
+  BOp_LogicalAnd, BOp_LogicalOr, BOp_LShift, BOp_RShift
+]> {
+  let cppNamespace = "::mlir::gccjit";
+}
+
+def BinaryOp : GCCJIT_Op<"binary"> {
+  let summary = "Binary operation";
+  let description = [{
+    The "binary" operation represents a binary operation.
+    ```mlir
+    %res = gccjit.binary plus ( %lhs : !gccjit.int<i32>, %rhs : !gccjit.int<i32> ) : !gccjit.int<i32>
+    ```
+  }];
+  let arguments = (ins BOpAttr:$op, AnyType:$lhs, AnyType:$rhs);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $op `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Comparison Operations
+//===----------------------------------------------------------------------===//
+def CmpOp_Eq : I32EnumAttrCase<"Eq", 0, "eq">;
+def CmpOp_Ne : I32EnumAttrCase<"Ne", 1, "ne">;
+def CmpOp_Lt : I32EnumAttrCase<"Lt", 2, "lt">;
+def CmpOp_Le : I32EnumAttrCase<"Le", 3, "le">;
+def CmpOp_Gt : I32EnumAttrCase<"Gt", 4, "gt">;
+def CmpOp_Ge : I32EnumAttrCase<"Ge", 5, "ge">;
+
+def CmpOpAttr : I32EnumAttr<"CmpOp", "comparison operation", [
+  CmpOp_Eq, CmpOp_Ne, CmpOp_Lt, CmpOp_Le, CmpOp_Gt, CmpOp_Ge
+]> {
+  let cppNamespace = "::mlir::gccjit";
+}
+
+def CompareOp : GCCJIT_Op<"compare"> {
+  let summary = "Comparison operation";
+  let description = [{
+    The "compare" operation represents a comparison operation.
+    ```mlir
+    %res = gccjit.compare eq ( %lhs : !gccjit.int<i32>, %rhs : !gccjit.int<i32> ) : !gccjit.bool
+    ```
+  }];
+  let arguments = (ins CmpOpAttr:$op, AnyType:$lhs, AnyType:$rhs);
+  let results = (outs GCCJIT_BoolType:$result);
+  let assemblyFormat = [{
+    $op `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Function Call
+//===----------------------------------------------------------------------===//
+def CallOp : GCCJIT_Op<"call"> {
+  let summary = "Function call";
+  let description = [{
+    The "call" operation represents a function call.
+    ```mlir
+    %res = gccjit.call @foo ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
+    ```
+    If tail call is required, the `tail` attribute should be set to true.
+    ```mlir
+    %res = gccjit.call tail @foo ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
+    ```
+  }];
+  let arguments = (ins SymbolRefAttr:$callee, Variadic<AnyType>:$args, UnitAttr:$tail);
+  let results = (outs Optional<AnyType>:$result);
+  let assemblyFormat = [{
+    custom<TailCallAttr>($tail) 
+    $callee `(` $args `)` `:` functional-type($args, $result) attr-dict
+  }];
+}
+
+def PtrCallOp : GCCJIT_Op<"ptr_call"> {
+  let summary = "Function pointer call";
+  let description = [{
+    The "ptr_call" operation represents a function pointer call.
+    ```mlir
+    %res = gccjit.ptr_call %fn ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
+    ```
+    If tail call is required, the `tail` attribute should be set to true.
+    ```mlir
+    %res = gccjit.ptr_call tail %fn ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$callee, Variadic<AnyType>:$args, UnitAttr:$tail);
+  let results = (outs Optional<AnyType>:$result);
+  let assemblyFormat = [{
+    custom<TailCallAttr>($tail) 
+    $callee `(` $args `)` `:` functional-type($args, $result) 
+    custom<PtrCalleeTypeInference>(ref(type($args)), ref(type($result)), type($callee))
+    attr-dict
   }];
 }
 

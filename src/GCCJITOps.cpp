@@ -43,6 +43,7 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/SmallVector.h"
+#include <llvm-20/llvm/Support/LogicalResult.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -256,6 +257,37 @@ void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
   }
 }
 
+ParseResult parseArrayOrVectorElements(
+    OpAsmParser &parser, Type expectedType,
+    llvm::SmallVectorImpl<OpAsmParser::UnresolvedOperand> &elementValues,
+    llvm::SmallVectorImpl<Type> &elementTypes) {
+  llvm_unreachable("Not implemented");
+}
+
+void printArrayOrVectorElements(OpAsmPrinter &p, Operation *op,
+                                Type expectedType, OperandRange elementValues,
+                                ValueTypeRange<OperandRange> elementTypes) {
+  llvm_unreachable("Not implemented");
+}
+
+ParseResult parseTailCallAttr(OpAsmParser &parser, UnitAttr &tailCallAttr) {
+  if (parser.parseOptionalKeyword("tail"))
+    tailCallAttr = UnitAttr::get(parser.getContext());
+  return success();
+}
+void printTailCallAttr(OpAsmPrinter &p, Operation *, UnitAttr tailCallAttr) {
+  if (tailCallAttr)
+    p << " tail";
+}
+ParseResult parsePtrCalleeTypeInference(OpAsmParser &parser, TypeRange argTypes,
+                                        Type resultType, Type &calleeType) {
+  llvm_unreachable("Not implemented");
+}
+
+void printPtrCalleeTypeInference(OpAsmPrinter &, Operation *,
+                                 ValueTypeRange<OperandRange>, Type, Type) {
+  // nothing to print
+}
 } // namespace
 
 #define GET_OP_CLASSES
@@ -352,3 +384,7 @@ LogicalResult EvalOp::verify() {
     return emitOpError("operand should be an rvalue");
   return success();
 }
+
+//===----------------------------------------------------------------------===//
+// RValue Expressions
+//===----------------------------------------------------------------------===//
