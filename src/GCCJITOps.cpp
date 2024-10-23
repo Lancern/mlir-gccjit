@@ -190,11 +190,11 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
       if (parser.parseLParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected '(' after 'literal'");
-      StringInitializerAttr stringInitializer;
-      if (parser.parseCustomAttributeWithFallback(stringInitializer))
+      StringLiteralAttr StringLiteral;
+      if (parser.parseCustomAttributeWithFallback(StringLiteral))
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected string initializer");
-      initializer = stringInitializer;
+      initializer = StringLiteral;
       if (parser.parseRParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected ')' after string initializer");
@@ -233,10 +233,10 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
 
 void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
                             Attribute initializer, Region &body) {
-  if (auto stringInitializer =
-          dyn_cast_if_present<StringInitializerAttr>(initializer)) {
+  if (auto StringLiteral =
+          dyn_cast_if_present<StringLiteralAttr>(initializer)) {
     p << "literal(";
-    p.printStrippedAttrOrType(stringInitializer);
+    p.printStrippedAttrOrType(StringLiteral);
     p << ")";
     return;
   }
@@ -277,15 +277,6 @@ ParseResult parseTailCallAttr(OpAsmParser &parser, UnitAttr &tailCallAttr) {
 void printTailCallAttr(OpAsmPrinter &p, Operation *, UnitAttr tailCallAttr) {
   if (tailCallAttr)
     p << " tail";
-}
-ParseResult parsePtrCalleeTypeInference(OpAsmParser &parser, TypeRange argTypes,
-                                        Type resultType, Type &calleeType) {
-  llvm_unreachable("Not implemented");
-}
-
-void printPtrCalleeTypeInference(OpAsmPrinter &, Operation *,
-                                 ValueTypeRange<OperandRange>, Type, Type) {
-  // nothing to print
 }
 } // namespace
 

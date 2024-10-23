@@ -325,7 +325,7 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
     OptionalAttr<TLSModelAttr>:$tls_model,
     OptionalAttr<LinkSectionAttr>:$link_section,
     OptionalAttr<VisibilityAttr>:$visibility,
-    OptionalAttr<AnyAttrOf<[StringInitializerAttr, ByteArrayInitializerAttr]>>:$initializer
+    OptionalAttr<AnyAttrOf<[StringLiteralAttr, ByteArrayInitializerAttr]>>:$initializer
   );
   let regions = (region AnyRegion:$body);
   let assemblyFormat = [{
@@ -532,9 +532,172 @@ def PtrCallOp : GCCJIT_Op<"ptr_call"> {
   let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{
     custom<TailCallAttr>($tail) 
-    $callee `(` $args `)` `:` functional-type($args, $result) 
-    custom<PtrCalleeTypeInference>(ref(type($args)), ref(type($result)), type($callee))
-    attr-dict
+    $callee `(` $args `)` `:` functional-type(operands, results) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Casting
+//===----------------------------------------------------------------------===//
+def CastOp : GCCJIT_Op<"cast"> {
+  let summary = "Cast operation";
+  let description = [{
+    The "cast" operation represents a casting operation.
+    ```mlir
+    %res = gccjit.cast %value : !gccjit.int<i32> to !gccjit.int<i64>
+    ```
+    Currently only a limited set of conversions are possible:
+    - `int <-> float`
+    - `int <-> pointer`
+    - `pointer <-> pointer`
+  }];
+  let arguments = (ins AnyType:$value);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $value `:`  type($value) `to` type($result) attr-dict
+  }];
+}
+
+def BitCast : GCCJIT_Op<"bitcast"> {
+  let summary = "Bitcast operation";
+  let description = [{
+    Given an rvalue of T, bitcast it to another type, 
+    meaning that this will generate a new rvalue by interpreting 
+    the bits of rvalue to the layout of type.
+
+    The type of rvalue must be the same size as the size of type.
+    ```mlir
+    %res = gccjit.bitcast %value : !gccjit.int<long> to !gccjit.int<unsigned long>
+    ```
+  }];
+  let arguments = (ins AnyType:$value);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $value `:`  type($value) `to` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// LiteralOp
+//===----------------------------------------------------------------------===//
+def LiteralOp : GCCJIT_Op<"literal"> {
+  let summary = "Literal operation";
+  let description = [{
+    The "literal" operation represents a literal value.
+    ```mlir
+    !str = !gccjit.qualified<!gccjit.int<char>, const>
+    %res = gccjit.literal #gccjit.str<"Hello, World!"> : !str
+    ```
+  }];
+  let arguments = (ins StringLiteralAttr:$value);
+  let results = (outs GCCJIT_QualifiedType:$result);
+  let assemblyFormat = [{
+    $value `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Addr Operation
+//===----------------------------------------------------------------------===//
+def AddrOp : GCCJIT_Op<"addr"> {
+  let summary = "Address of an lvalue";
+  let description = [{
+    The "addr" operation returns the address of an lvalue.
+    ```mlir
+    %res = gccjit.addr (%lvalue : !gccjit.lvalue<!i32>) : !gccjit.ptr<!i32>
+    ```
+  }];
+  let arguments = (ins GCCJIT_LValueType:$lvalue);
+  let results = (outs GCCJIT_PointerType:$result);
+  let assemblyFormat = [{
+    `(` $lvalue `:` type($lvalue) `)` `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Deref Operation
+//===----------------------------------------------------------------------===//
+def DerefOp : GCCJIT_Op<"deref"> {
+  let summary = "Dereference a pointer";
+  let description = [{
+    The "deref" operation dereferences a pointer.
+    ```mlir
+    %res = gccjit.deref (%ptr : !gccjit.ptr<!i32>) : !gccjit.lvalue<!i32>
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$ptr);
+  let results = (outs GCCJIT_LValueType:$result);
+  let assemblyFormat = [{
+    `(` $ptr `:` type($ptr) `)` `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Array Access
+//===----------------------------------------------------------------------===//
+def ArrayAccessOp : GCCJIT_Op<"array_access"> {
+  let summary = "Array indexing";
+  let description = [{
+    The "array_idx" operation represents an array indexing operation.
+    ```mlir
+    %res = gccjit.array_idx %array[%idx] : (!gccjit.array<!i32, 10>, !i32) -> !gccjit.lvalue<!i32>
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$array, GCCJIT_IntType:$idx);
+  let results = (outs GCCJIT_LValueType:$result);
+  let assemblyFormat = [{
+    $array `[` $idx `]` `:` functional-type(operands, results) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Assignment Operation
+//===----------------------------------------------------------------------===//
+def AssignOp : GCCJIT_Op<"assign"> {
+  let summary = "Assignment operation";
+  let description = [{
+    The "assign" operation represents an assignment operation.
+    ```mlir
+    gccjit.assign %rvalue to $lvalue : !gccjit.lvalue<!i32>, !i32
+    ```
+  }];
+  let arguments = (ins AnyType:$rvalue, GCCJIT_LValueType:$lvalue);
+  let assemblyFormat = [{
+    $rvalue `to` $lvalue `:` type($rvalue) `,` type($lvalue) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Update Operation
+//===----------------------------------------------------------------------===//
+def UpdateOp : GCCJIT_Op<"update"> {
+  let summary = "Update operation";
+  let description = [{
+    The "update" operation represents an update operation.
+    ```mlir
+    gccjit.update minus %rvalue to $lvalue : !gccjit.lvalue<!i32>, !i32
+    ```
+  }];
+  let arguments = (ins BOpAttr:$op, AnyType:$rvalue, GCCJIT_LValueType:$lvalue);
+  let assemblyFormat = [{
+    $op $rvalue `to` $lvalue `:` type($rvalue) `,` type($lvalue) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Comment Operation
+//===----------------------------------------------------------------------===//
+def CommentOp : GCCJIT_Op<"comment", [Pure]> {
+  let summary = "Comment operation";
+  let description = [{
+    The "comment" operation represents a comment.
+    ```mlir
+    gccjit.comment #gccjit.str<"This is a comment">
+    ```
+  }];
+  let arguments = (ins StringLiteralAttr:$comment);
+  let assemblyFormat = [{
+    $comment attr-dict
   }];
 }
 
