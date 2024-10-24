@@ -549,10 +549,15 @@ def CallOp : GCCJIT_Op<"call"> {
     %res = gccjit.call tail @foo ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
   }];
-  let arguments = (ins SymbolRefAttr:$callee, Variadic<AnyType>:$args, UnitAttr:$tail);
+  let arguments = (ins SymbolRefAttr:$callee, 
+    Variadic<AnyType>:$args, 
+    OptionalAttr<UnitAttr>:$tail,
+    OptionalAttr<UnitAttr>:$builtin
+  );
   let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{
-    custom<TailCallAttr>($tail) 
+    custom<TailCallAttr>($tail)
+    custom<BuiltinCallAttr>($builtin)
     $callee `(` $args `)` `:` functional-type($args, $result) attr-dict
   }];
 }

@@ -43,6 +43,7 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/SmallVector.h"
+#include <llvm-20/llvm/ADT/StringRef.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -190,11 +191,11 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
       if (parser.parseLParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected '(' after 'literal'");
-      StringLiteralAttr StringLiteral;
-      if (parser.parseCustomAttributeWithFallback(StringLiteral))
+      StringLiteralAttr stringLiteral;
+      if (parser.parseCustomAttributeWithFallback(stringLiteral))
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected string initializer");
-      initializer = StringLiteral;
+      initializer = stringLiteral;
       if (parser.parseRParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected ')' after string initializer");
@@ -233,10 +234,10 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
 
 void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
                             Attribute initializer, Region &body) {
-  if (auto StringLiteral =
+  if (auto stringLiteral =
           dyn_cast_if_present<StringLiteralAttr>(initializer)) {
     p << "literal(";
-    p.printStrippedAttrOrType(StringLiteral);
+    p.printStrippedAttrOrType(stringLiteral);
     p << ")";
     return;
   }
@@ -269,15 +270,41 @@ void printArrayOrVectorElements(OpAsmPrinter &p, Operation *op,
   llvm_unreachable("Not implemented");
 }
 
-ParseResult parseTailCallAttr(OpAsmParser &parser, UnitAttr &tailCallAttr) {
-  if (parser.parseOptionalKeyword("tail"))
-    tailCallAttr = UnitAttr::get(parser.getContext());
-  return success();
-}
-void printTailCallAttr(OpAsmPrinter &p, Operation *, UnitAttr tailCallAttr) {
-  if (tailCallAttr)
-    p << " tail";
-}
+template <size_t N> struct ParseNamedUnitAttr {
+  char name[N];
+  constexpr ParseNamedUnitAttr(const char (&name)[N]) {
+    for (size_t i = 0; i < N; ++i)
+      this->name[i] = name[i];
+  }
+  ParseResult operator()(OpAsmParser &parser, UnitAttr &attr) const {
+    if (parser.parseOptionalKeyword(name))
+      attr = UnitAttr::get(parser.getContext());
+    return success();
+  }
+};
+
+template <size_t N> struct PrintNamedUnitAttr {
+  char name[N];
+  constexpr PrintNamedUnitAttr(const char (&name)[N]) {
+    for (size_t i = 0; i < N; ++i)
+      this->name[i] = name[i];
+  }
+  void operator()(OpAsmPrinter &p, Operation *, UnitAttr attr) const {
+    if (!attr)
+      p << name;
+  }
+};
+
+template <size_t N>
+ParseNamedUnitAttr(const char (&)[N]) -> ParseNamedUnitAttr<N>;
+
+template <size_t N>
+PrintNamedUnitAttr(const char (&)[N]) -> PrintNamedUnitAttr<N>;
+
+constexpr ParseNamedUnitAttr parseTailCallAttr{"tail"};
+constexpr PrintNamedUnitAttr printTailCallAttr{"tail"};
+constexpr ParseNamedUnitAttr parseBuiltinCallAttr{"builtin"};
+constexpr PrintNamedUnitAttr printBuiltinCallAttr{"builtin"};
 } // namespace
 
 #define GET_OP_CLASSES
