@@ -64,19 +64,17 @@ class RegionVisitor {
   GCCJITTranslation &translator;
   Region &region [[maybe_unused]];
   llvm::DenseMap<Value, Expr> exprCache;
-  llvm::DenseMap<Value, gcc_jit_lvalue *> variables;
   llvm::DenseMap<Block *, gcc_jit_block *> blocks;
 
 public:
   RegionVisitor(GCCJITTranslation &translator, Region &region);
-  gcc_jit_lvalue *queryVariable(Value value);
   GCCJITTranslation &getTranslator() const;
   gcc_jit_context *getContext() const;
   MLIRContext *getMLIRContext() const;
   void translateIntoContext();
 
 private:
-  Expr visitExpr(Operation *op);
+  Expr visitExpr(Value value);
   void visitExprAsRValue(ValueRange operands,
                          llvm::SmallVectorImpl<gcc_jit_rvalue *> &result);
   gcc_jit_rvalue *visitExprWithoutCache(ConstantOp op);
@@ -94,6 +92,14 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(AddrOp op);
   gcc_jit_rvalue *visitExprWithoutCache(FnAddrOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
+
+  /// The following operations are entrypoints for real codegen.
+  void visitAssignOp(gcc_jit_block *blk, AssignOp op);
+  void visitUpdateOp(gcc_jit_block *blk, UpdateOp op);
+  void visitReturnOp(gcc_jit_block *blk, ReturnOp op);
+  void visitSwitchOp(gcc_jit_block *blk, SwitchOp op);
+  void visitJumpOp(gcc_jit_block *blk, JumpOp op);
+  void visitEvalOp(gcc_jit_block *blk, EvalOp op);
 };
 
 } // namespace
@@ -175,6 +181,7 @@ void GCCJITTranslation::translateModuleToGCCJIT(ModuleOp op) {
   populateGCCJITModuleOptions();
   declareAllFunctionAndGlobals();
   translateGlobalInitializers();
+  translateFunctions();
 }
 
 gcc_jit_location *GCCJITTranslation::getLocation(LocationAttr loc) {
@@ -329,7 +336,7 @@ static gcc_jit_tls_model convertTLSModel(TLSModelEnum model) {
 }
 
 void GCCJITTranslation::declareAllFunctionAndGlobals() {
-  moduleOp.walk([&](gccjit::FuncOp func) {
+  for (auto func : moduleOp.getOps<gccjit::FuncOp>()) {
     auto type = func.getFunctionType();
     llvm::SmallVector<gcc_jit_type *> paramTypes;
     llvm::SmallVector<gcc_jit_param *> params;
@@ -353,8 +360,8 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
     processFunctionAttrs(func, funcHandle);
     SymbolRefAttr symRef = SymbolRefAttr::get(getMLIRContext(), name);
     functionMap[symRef] = {funcHandle, std::move(params)};
-  });
-  moduleOp.walk([&](gccjit::GlobalOp global) {
+  }
+  for (auto global : moduleOp.getOps<gccjit::GlobalOp>()) {
     auto type = global.getType();
     auto *typeHandle = convertType(type);
     auto name = global.getSymName().str();
@@ -394,16 +401,16 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
           .Default([](Attribute) { llvm_unreachable("unknown initializer"); });
     }
     // if the global has body, we translate them in the next pass
-  });
+  }
 }
 
 void GCCJITTranslation::translateGlobalInitializers() {
-  moduleOp.walk([&](gccjit::GlobalOp global) {
+  for (auto global : moduleOp.getOps<gccjit::GlobalOp>()) {
     if (global.getBody().empty())
       return;
     RegionVisitor visitor(*this, global.getBody());
     visitor.translateIntoContext();
-  });
+  }
 }
 
 ///===----------------------------------------------------------------------===///
@@ -419,7 +426,7 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
     auto *function = translator.getFunction(symName);
     for (auto arg : region.getArguments()) {
       auto *lvalue = gcc_jit_function_get_param(function, arg.getArgNumber());
-      variables[arg] = gcc_jit_param_as_lvalue(lvalue);
+      exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
     }
     region.walk([&](LocalOp local) {
       auto *type = translator.convertType(local.getType());
@@ -427,13 +434,16 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
       auto name = llvm::Twine("var").concat(llvm::Twine(variableCount++)).str();
       auto *lvalue =
           gcc_jit_function_new_local(function, loc, type, name.c_str());
-      variables[local] = lvalue;
+      exprCache[local] = lvalue;
     });
+    size_t blockCount = 0;
+    for (auto &block : region) {
+      auto *blk = gcc_jit_function_new_block(
+          function,
+          llvm::Twine("bb").concat(llvm::Twine(blockCount++)).str().c_str());
+      blocks[&block] = blk;
+    }
   }
-}
-
-gcc_jit_lvalue *RegionVisitor::queryVariable(Value value) {
-  return variables.lookup(value);
 }
 
 GCCJITTranslation &RegionVisitor::getTranslator() const { return translator; }
@@ -449,8 +459,20 @@ MLIRContext *RegionVisitor::getMLIRContext() const {
 void RegionVisitor::translateIntoContext() {
   auto *parent = region.getParentOp();
   if (auto funcOp = dyn_cast<gccjit::FuncOp>(parent)) {
-    (void)funcOp;
-    llvm_unreachable("NYI");
+    for (auto [mlirBlk, gccBlk] : blocks) {
+      auto *blk = gccBlk;
+      mlirBlk->walk([&](Operation *op) {
+        llvm::TypeSwitch<Operation *>(op)
+            .Case([&](AssignOp op) { visitAssignOp(blk, op); })
+            .Case([&](UpdateOp op) { visitUpdateOp(blk, op); })
+            .Case([&](ReturnOp op) { visitReturnOp(blk, op); })
+            .Case([&](SwitchOp op) { visitSwitchOp(blk, op); })
+            .Case([&](JumpOp op) { visitJumpOp(blk, op); })
+            .Case([&](EvalOp op) { visitEvalOp(blk, op); })
+            .Default([](auto) { return; });
+      });
+    }
+    return;
   }
   if (auto globalOp = dyn_cast<gccjit::GlobalOp>(parent)) {
     assert(region.getBlocks().size() == 1 &&
@@ -458,7 +480,7 @@ void RegionVisitor::translateIntoContext() {
     Block &block = region.getBlocks().front();
     auto terminator = cast<gccjit::ReturnOp>(block.getTerminator());
     auto value = terminator->getOperand(0);
-    auto rvalue = visitExpr(value.getDefiningOp());
+    auto rvalue = visitExpr(value);
     auto symName = SymbolRefAttr::get(getMLIRContext(), globalOp.getSymName());
     auto *lvalue = getTranslator().getGlobalLValue(symName);
     gcc_jit_global_set_initializer_rvalue(lvalue, rvalue);
@@ -467,12 +489,14 @@ void RegionVisitor::translateIntoContext() {
   llvm_unreachable("unknown region parent");
 }
 
-Expr RegionVisitor::visitExpr(Operation *op) {
-  if (op->getNumResults() != 1)
-    llvm_unreachable("expected single result operation");
+Expr RegionVisitor::visitExpr(Value value) {
+  auto &cached = exprCache[value];
 
-  auto &cached = exprCache[op->getResult(0)];
-  if (!cached)
+  if (!cached) {
+    auto *op = value.getDefiningOp();
+    if (op->getNumResults() != 1)
+      llvm_unreachable("expected single result operation");
+
     cached =
         llvm::TypeSwitch<Operation *, Expr>(op)
             .Case([&](ConstantOp op) { return visitExprWithoutCache(op); })
@@ -493,13 +517,15 @@ Expr RegionVisitor::visitExpr(Operation *op) {
             .Default([](Operation *) -> Expr {
               llvm_unreachable("unknown expression type");
             });
+  }
+
   return cached;
 }
 
 void RegionVisitor::visitExprAsRValue(
     ValueRange operands, llvm::SmallVectorImpl<gcc_jit_rvalue *> &result) {
   for (auto operand : operands)
-    result.push_back(visitExpr(operand.getDefiningOp()));
+    result.push_back(visitExpr(operand));
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(ConstantOp op) {
@@ -547,7 +573,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AlignOfOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AsRValueOp op) {
-  auto lvalue = visitExpr(op.getLvalue().getDefiningOp());
+  auto lvalue = visitExpr(op.getLvalue());
   return gcc_jit_lvalue_as_rvalue(lvalue);
 }
 
@@ -583,8 +609,8 @@ static gcc_jit_binary_op convertBinaryOp(BOp kind) {
 
 // RValue always has a defining operation
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(BinaryOp op) {
-  auto lhs = visitExpr(op.getLhs().getDefiningOp());
-  auto rhs = visitExpr(op.getRhs().getDefiningOp());
+  auto lhs = visitExpr(op.getLhs());
+  auto rhs = visitExpr(op.getRhs());
   auto kind = convertBinaryOp(op.getOp());
   auto *loc = getTranslator().getLocation(op.getLoc());
   auto *ctxt = getContext();
@@ -607,7 +633,7 @@ static gcc_jit_unary_op convertUnaryOp(UOp kind) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(UnaryOp op) {
-  auto operand = visitExpr(op.getOperand().getDefiningOp());
+  auto operand = visitExpr(op.getOperand());
   auto kind = convertUnaryOp(op.getOp());
   auto *loc = getTranslator().getLocation(op.getLoc());
   auto *ctxt = getContext();
@@ -634,8 +660,8 @@ static gcc_jit_comparison convertCompareOp(CmpOp kind) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(CompareOp op) {
-  auto lhs = visitExpr(op.getLhs().getDefiningOp());
-  auto rhs = visitExpr(op.getRhs().getDefiningOp());
+  auto lhs = visitExpr(op.getLhs());
+  auto rhs = visitExpr(op.getRhs());
   auto kind = convertCompareOp(op.getOp());
   auto *loc = getTranslator().getLocation(op.getLoc());
   auto *ctxt = getContext();
@@ -657,12 +683,13 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(CallOp op) {
   auto *ctxt = getContext();
   auto *call =
       gcc_jit_context_new_call(ctxt, loc, callee, args.size(), args.data());
-  gcc_jit_rvalue_set_bool_require_tail_call(call, op.getTail());
+  if (op.getTail())
+    gcc_jit_rvalue_set_bool_require_tail_call(call, true);
   return call;
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(CastOp op) {
-  auto operand = visitExpr(op.getOperand().getDefiningOp());
+  auto operand = visitExpr(op.getOperand());
   auto *loc = getTranslator().getLocation(op.getLoc());
   auto *ctxt = getContext();
   auto *type = getTranslator().convertType(op.getType());
@@ -670,7 +697,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(CastOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(BitCastOp op) {
-  auto operand = visitExpr(op.getOperand().getDefiningOp());
+  auto operand = visitExpr(op.getOperand());
   auto *loc = getTranslator().getLocation(op.getLoc());
   auto *ctxt = getContext();
   auto *type = getTranslator().convertType(op.getType());
@@ -678,19 +705,20 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(BitCastOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(PtrCallOp op) {
-  auto callee = visitExpr(op.getCallee().getDefiningOp());
+  auto callee = visitExpr(op.getCallee());
   llvm::SmallVector<gcc_jit_rvalue *> args;
   visitExprAsRValue(op.getArgs(), args);
   auto *loc = getTranslator().getLocation(op.getLoc());
   auto *ctxt = getContext();
   auto *call = gcc_jit_context_new_call_through_ptr(ctxt, loc, callee,
                                                     args.size(), args.data());
-  gcc_jit_rvalue_set_bool_require_tail_call(call, op.getTail());
+  if (op.getTail())
+    gcc_jit_rvalue_set_bool_require_tail_call(call, true);
   return call;
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AddrOp op) {
-  auto lvalue = visitExpr(op.getOperand().getDefiningOp());
+  auto lvalue = visitExpr(op.getOperand());
   auto *loc = getTranslator().getLocation(op.getLoc());
   return gcc_jit_lvalue_get_address(lvalue, loc);
 }
@@ -706,6 +734,73 @@ gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(GetGlobalOp op) {
   auto *lvalue = getTranslator().getGlobalLValue(op.getSym());
   assert(lvalue && "global not found");
   return lvalue;
+}
+
+void RegionVisitor::visitAssignOp(gcc_jit_block *blk, AssignOp op) {
+  auto lvalue = visitExpr(op.getLvalue());
+  auto rvalue = visitExpr(op.getRvalue());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  gcc_jit_block_add_assignment(blk, loc, lvalue, rvalue);
+}
+
+void RegionVisitor::visitUpdateOp(gcc_jit_block *blk, UpdateOp op) {
+  auto lvalue = visitExpr(op.getLvalue());
+  auto rvalue = visitExpr(op.getRvalue());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto kind = convertBinaryOp(op.getOp());
+  gcc_jit_block_add_assignment_op(blk, loc, lvalue, kind, rvalue);
+}
+
+void RegionVisitor::visitReturnOp(gcc_jit_block *blk, ReturnOp op) {
+  if (op->getNumOperands())
+    gcc_jit_block_end_with_return(blk, getTranslator().getLocation(op.getLoc()),
+                                  visitExpr(op.getOperand(0)));
+  else
+    gcc_jit_block_end_with_void_return(
+        blk, getTranslator().getLocation(op.getLoc()));
+}
+
+void RegionVisitor::visitSwitchOp(gcc_jit_block *blk, SwitchOp op) {
+  auto value = visitExpr(op.getValue());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  llvm::SmallVector<gcc_jit_case *> cases;
+  for (auto [lb, ub, dst] :
+       llvm::zip(op.getCaseLowerbound(), op.getCaseUpperbound(),
+                 op.getCaseDestinations())) {
+    // TODO: handle signedness
+    // TODO: generalize switch statement to support rvalue expressions
+    // (constant)
+    auto intLb = cast<IntAttr>(lb).getValue().getZExtValue();
+    auto intUb = cast<IntAttr>(ub).getValue().getZExtValue();
+    auto *dstBlk = blocks[dst];
+    auto *lbv =
+        gcc_jit_context_new_rvalue_from_long(getContext(), nullptr, intLb);
+    auto *ubv =
+        gcc_jit_context_new_rvalue_from_long(getContext(), nullptr, intUb);
+    cases.push_back(gcc_jit_context_new_case(getContext(), lbv, ubv, dstBlk));
+  }
+  auto *defaultBlk = blocks[op.getDefaultDestination()];
+  gcc_jit_block_end_with_switch(blk, loc, value, defaultBlk, cases.size(),
+                                cases.data());
+}
+
+void RegionVisitor::visitJumpOp(gcc_jit_block *blk, JumpOp op) {
+  auto *dst = blocks[op.getDest()];
+  gcc_jit_block_end_with_jump(blk, getTranslator().getLocation(op.getLoc()),
+                              dst);
+}
+
+void RegionVisitor::visitEvalOp(gcc_jit_block *blk, EvalOp op) {
+  auto value = visitExpr(op.getOperand());
+  gcc_jit_block_add_eval(blk, getTranslator().getLocation(op.getLoc()), value);
+}
+
+void GCCJITTranslation::translateFunctions() {
+  for (auto func : moduleOp.getOps<gccjit::FuncOp>()) {
+    auto &region = func.getBody();
+    RegionVisitor visitor(*this, region);
+    visitor.translateIntoContext();
+  }
 }
 
 //===----------------------------------------------------------------------===//

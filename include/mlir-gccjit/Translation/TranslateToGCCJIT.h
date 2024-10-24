@@ -26,6 +26,10 @@ namespace mlir::gccjit {
 
 void registerToGCCJITGimpleTranslation();
 void registerToGCCJITReproducerTranslation();
+void registerToGCCJITAssemblyTranslation();
+void registerToGCCJITObjectTranslation();
+void registerToGCCJITExecutableTranslation();
+void registerToGCCJITDylibTranslation();
 
 struct GCCJITContextDeleter {
   void operator()(gcc_jit_context *ctxt) const;
@@ -79,6 +83,7 @@ private:
   void populateGCCJITModuleOptions();
   void declareAllFunctionAndGlobals();
   void translateGlobalInitializers();
+  void translateFunctions();
 };
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op);

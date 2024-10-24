@@ -25,15 +25,44 @@
 
 namespace mlir::gccjit {
 namespace {
+enum class OutputType {
+  Gimple,
+  Reproducer,
+  Assembly,
+  Object,
+  Executable,
+  Dylib
+};
+
 llvm::Expected<llvm::sys::fs::TempFile>
-dumpContextToTempfile(gcc_jit_context *ctxt, bool reproducer) {
+dumpContextToTempfile(gcc_jit_context *ctxt, OutputType type) {
   auto file = llvm::sys::fs::TempFile::create("mlir-gccjit-%%%%%%%");
   if (!file)
     return file.takeError();
-  if (reproducer)
-    gcc_jit_context_dump_reproducer_to_file(ctxt, file->TmpName.c_str());
-  else
+  switch (type) {
+  case OutputType::Gimple:
     gcc_jit_context_dump_to_file(ctxt, file->TmpName.c_str(), false);
+    break;
+  case OutputType::Reproducer:
+    gcc_jit_context_dump_reproducer_to_file(ctxt, file->TmpName.c_str());
+    break;
+  case OutputType::Assembly:
+    gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_ASSEMBLER,
+                                    file->TmpName.c_str());
+    break;
+  case OutputType::Object:
+    gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_OBJECT_FILE,
+                                    file->TmpName.c_str());
+    break;
+  case OutputType::Executable:
+    gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_EXECUTABLE,
+                                    file->TmpName.c_str());
+    break;
+  case OutputType::Dylib:
+    gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_DYNAMIC_LIBRARY,
+                                    file->TmpName.c_str());
+    break;
+  }
   return file;
 }
 
@@ -49,10 +78,10 @@ LogicalResult copyFileToStream(llvm::sys::fs::TempFile file,
 }
 
 void registerTranslation(llvm::StringRef name, llvm::StringRef desc,
-                         bool reproducer) {
+                         OutputType type) {
   TranslateFromMLIRRegistration registration(
       name, desc,
-      [reproducer](Operation *op, raw_ostream &output) {
+      [type](Operation *op, raw_ostream &output) {
         auto module = dyn_cast<ModuleOp>(op);
         if (!module) {
           op->emitError("expected 'module' operation");
@@ -63,7 +92,7 @@ void registerTranslation(llvm::StringRef name, llvm::StringRef desc,
           op->emitError("failed to translate to GCCJIT context");
           return failure();
         }
-        auto file = dumpContextToTempfile(context.get().get(), reproducer);
+        auto file = dumpContextToTempfile(context.get().get(), type);
         if (!file) {
           op->emitError("failed to dump GCCJIT context to tempfile");
           return failure();
@@ -79,11 +108,36 @@ void registerTranslation(llvm::StringRef name, llvm::StringRef desc,
 
 void registerToGCCJITGimpleTranslation() {
   registerTranslation("mlir-to-gccjit-gimple",
-                      "Translate MLIR to GCCJIT's GIMPLE format", false);
+                      "Translate MLIR to GCCJIT's GIMPLE format",
+                      OutputType::Gimple);
 }
 
 void registerToGCCJITReproducerTranslation() {
   registerTranslation("mlir-to-gccjit-reproducer",
-                      "Translate MLIR to GCCJIT's reproducer format", true);
+                      "Translate MLIR to GCCJIT's reproducer format",
+                      OutputType::Reproducer);
+}
+
+void registerToGCCJITAssemblyTranslation() {
+  registerTranslation("mlir-to-gccjit-assembly",
+                      "Translate MLIR to GCCJIT's assembly format",
+                      OutputType::Assembly);
+}
+
+void registerToGCCJITObjectTranslation() {
+  registerTranslation("mlir-to-gccjit-object",
+                      "Translate MLIR to GCCJIT's object file format",
+                      OutputType::Object);
+}
+
+void registerToGCCJITExecutableTranslation() {
+  registerTranslation("mlir-to-gccjit-executable",
+                      "Translate MLIR to GCCJIT's executable format",
+                      OutputType::Executable);
+}
+void registerToGCCJITDylibTranslation() {
+  registerTranslation("mlir-to-gccjit-dylib",
+                      "Translate MLIR to GCCJIT's dynamic library format",
+                      OutputType::Dylib);
 }
 } // namespace mlir::gccjit

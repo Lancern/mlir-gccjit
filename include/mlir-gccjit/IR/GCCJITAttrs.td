@@ -149,7 +149,7 @@ def NullAttr : GCCJIT_Attr<"Null", "null", [TypedAttrInterface]> {
 def OptLevel_0 : I32EnumAttrCase<"O0", 0, "O0">;
 def OptLevel_1 : I32EnumAttrCase<"O1", 1, "O1">;
 def OptLevel_2 : I32EnumAttrCase<"O2", 2, "O2">;
-def OptLevel_3 : I32EnumAttrCase<"O3", 3, "O2">;
+def OptLevel_3 : I32EnumAttrCase<"O3", 3, "O3">;
 def OptLevelEnum : I32EnumAttr<"OptLevelEnum", "Optimization level",
                           [OptLevel_0, OptLevel_1, OptLevel_2, OptLevel_3]> {
   let cppNamespace = "mlir::gccjit";

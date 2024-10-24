@@ -569,7 +569,7 @@ def CallOp : GCCJIT_Op<"call"> {
     UnitAttr:$tail,
     UnitAttr:$builtin
   );
-  let results = (outs Optional<AnyType>:$result);
+  let results = (outs AnyType:$result);
   let assemblyFormat = [{
     custom<TailCallAttr>($tail)
     custom<BuiltinCallAttr>($builtin)
@@ -590,7 +590,7 @@ def PtrCallOp : GCCJIT_Op<"ptr_call"> {
     ```
   }];
   let arguments = (ins GCCJIT_PointerType:$callee, Variadic<AnyType>:$args, UnitAttr:$tail);
-  let results = (outs Optional<AnyType>:$result);
+  let results = (outs AnyType:$result);
   let assemblyFormat = [{
     custom<TailCallAttr>($tail) 
     $callee `(` $args `)` `:` functional-type(operands, results) attr-dict

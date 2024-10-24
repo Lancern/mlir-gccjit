@@ -23,6 +23,10 @@ int main(int argc, char **argv) {
   registerAllTranslations();
   mlir::gccjit::registerToGCCJITGimpleTranslation();
   mlir::gccjit::registerToGCCJITReproducerTranslation();
+  mlir::gccjit::registerToGCCJITAssemblyTranslation();
+  mlir::gccjit::registerToGCCJITObjectTranslation();
+  mlir::gccjit::registerToGCCJITExecutableTranslation();
+  mlir::gccjit::registerToGCCJITDylibTranslation();
   return failed(
       mlirTranslateMain(argc, argv, "GCCJIT Translation Testing Tool"));
 }
