@@ -257,9 +257,9 @@ def VisibilityAttr : GCCJIT_Attr<"Visibility", "visibility"> {
 }
 
 //===----------------------------------------------------------------------===//
-// StringInitializer Attr
+// StringLiteral Attr
 //===----------------------------------------------------------------------===//
-def StringInitializerAttr : GCCJIT_Attr<"StringInitializer", "string_initializer"> {
+def StringLiteralAttr : GCCJIT_Attr<"StringLiteral", "str"> {
   let summary = "String initializer";
   let parameters = (ins "StringAttr":$initializer);
   let description = [{

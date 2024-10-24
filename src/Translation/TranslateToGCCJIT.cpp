@@ -333,7 +333,7 @@ void Translator::declareAllFunctionAndGlobals() {
           visibility->getVisibility().str().c_str());
     if (auto initializer = global.getInitializer()) {
       llvm::TypeSwitch<Attribute>(*initializer)
-          .Case([&](StringInitializerAttr attr) {
+          .Case([&](StringLiteralAttr attr) {
             auto str = attr.getInitializer();
             auto blob = str.str();
             gcc_jit_global_set_initializer(globalHandle, blob.c_str(),

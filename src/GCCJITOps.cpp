@@ -190,11 +190,11 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
       if (parser.parseLParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected '(' after 'literal'");
-      StringInitializerAttr stringInitializer;
-      if (parser.parseCustomAttributeWithFallback(stringInitializer))
+      StringLiteralAttr StringLiteral;
+      if (parser.parseCustomAttributeWithFallback(StringLiteral))
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected string initializer");
-      initializer = stringInitializer;
+      initializer = StringLiteral;
       if (parser.parseRParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected ')' after string initializer");
@@ -233,10 +233,10 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
 
 void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
                             Attribute initializer, Region &body) {
-  if (auto stringInitializer =
-          dyn_cast_if_present<StringInitializerAttr>(initializer)) {
+  if (auto StringLiteral =
+          dyn_cast_if_present<StringLiteralAttr>(initializer)) {
     p << "literal(";
-    p.printStrippedAttrOrType(stringInitializer);
+    p.printStrippedAttrOrType(StringLiteral);
     p << ")";
     return;
   }
@@ -256,6 +256,28 @@ void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
   }
 }
 
+ParseResult parseArrayOrVectorElements(
+    OpAsmParser &parser, Type expectedType,
+    llvm::SmallVectorImpl<OpAsmParser::UnresolvedOperand> &elementValues,
+    llvm::SmallVectorImpl<Type> &elementTypes) {
+  llvm_unreachable("Not implemented");
+}
+
+void printArrayOrVectorElements(OpAsmPrinter &p, Operation *op,
+                                Type expectedType, OperandRange elementValues,
+                                ValueTypeRange<OperandRange> elementTypes) {
+  llvm_unreachable("Not implemented");
+}
+
+ParseResult parseTailCallAttr(OpAsmParser &parser, UnitAttr &tailCallAttr) {
+  if (parser.parseOptionalKeyword("tail"))
+    tailCallAttr = UnitAttr::get(parser.getContext());
+  return success();
+}
+void printTailCallAttr(OpAsmPrinter &p, Operation *, UnitAttr tailCallAttr) {
+  if (tailCallAttr)
+    p << " tail";
+}
 } // namespace
 
 #define GET_OP_CLASSES
@@ -352,3 +374,7 @@ LogicalResult EvalOp::verify() {
     return emitOpError("operand should be an rvalue");
   return success();
 }
+
+//===----------------------------------------------------------------------===//
+// RValue Expressions
+//===----------------------------------------------------------------------===//
