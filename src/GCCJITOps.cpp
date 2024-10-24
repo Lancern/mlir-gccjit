@@ -43,7 +43,6 @@
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/SmallVector.h"
-#include <llvm-20/llvm/ADT/StringRef.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -270,12 +269,9 @@ void printArrayOrVectorElements(OpAsmPrinter &p, Operation *op,
   llvm_unreachable("Not implemented");
 }
 
-template <size_t N> struct ParseNamedUnitAttr {
-  char name[N];
-  constexpr ParseNamedUnitAttr(const char (&name)[N]) {
-    for (size_t i = 0; i < N; ++i)
-      this->name[i] = name[i];
-  }
+struct ParseNamedUnitAttr {
+  std::string_view name;
+  constexpr ParseNamedUnitAttr(std::string_view name) : name(name) {}
   ParseResult operator()(OpAsmParser &parser, UnitAttr &attr) const {
     if (parser.parseOptionalKeyword(name))
       attr = UnitAttr::get(parser.getContext());
@@ -283,23 +279,14 @@ template <size_t N> struct ParseNamedUnitAttr {
   }
 };
 
-template <size_t N> struct PrintNamedUnitAttr {
-  char name[N];
-  constexpr PrintNamedUnitAttr(const char (&name)[N]) {
-    for (size_t i = 0; i < N; ++i)
-      this->name[i] = name[i];
-  }
+struct PrintNamedUnitAttr {
+  std::string_view name;
+  constexpr PrintNamedUnitAttr(std::string_view name) : name(name) {}
   void operator()(OpAsmPrinter &p, Operation *, UnitAttr attr) const {
     if (!attr)
       p << name;
   }
 };
-
-template <size_t N>
-ParseNamedUnitAttr(const char (&)[N]) -> ParseNamedUnitAttr<N>;
-
-template <size_t N>
-PrintNamedUnitAttr(const char (&)[N]) -> PrintNamedUnitAttr<N>;
 
 constexpr ParseNamedUnitAttr parseTailCallAttr{"tail"};
 constexpr PrintNamedUnitAttr printTailCallAttr{"tail"};
