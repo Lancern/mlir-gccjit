@@ -785,4 +785,22 @@ def DerefFieldOp : GCCJIT_Op<"deref_field"> {
     $ptr `[` $field `]` `:` functional-type(operands, results) attr-dict
   }];
 }
+
+//===----------------------------------------------------------------------===//
+// GetGlobalOp
+//===----------------------------------------------------------------------===//
+def GetGlobalOp : GCCJIT_Op<"get_global"> {
+  let summary = "Get global operation";
+  let description = [{
+    The "get_global" operation is used to get a lvalue of a global variable.
+    ```mlir
+    %res = gccjit.get_global @foo : !gccjit.lvalue<!i32>
+    ```
+  }];
+  let arguments = (ins SymbolRefAttr:$sym);
+  let results = (outs GCCJIT_LValueType:$result);
+  let assemblyFormat = [{
+    $sym `:` type($result) attr-dict
+  }];
+}
 #endif // GCCJIT_OPS
