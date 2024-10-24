@@ -49,6 +49,9 @@ public:
 
   gcc_jit_location *getLocation(LocationAttr loc);
 
+  gcc_jit_lvalue *getGlobalLValue(SymbolRefAttr symbol);
+  gcc_jit_function *getFunction(SymbolRefAttr symbol);
+
 private:
   struct FunctionEntry {
     gcc_jit_function *fnHandle;
@@ -75,6 +78,7 @@ private:
 
   void populateGCCJITModuleOptions();
   void declareAllFunctionAndGlobals();
+  void translateGlobalInitializers();
 };
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op);

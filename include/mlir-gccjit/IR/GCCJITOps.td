@@ -365,6 +365,21 @@ def SizeOfOp : GCCJIT_Op<"sizeof", [Pure]> {
   }];
 }
 
+def AlignOfOp : GCCJIT_Op<"alignof", [Pure]> {
+  let summary = "Alignment of a type";
+  let description = [{
+    The "alignof" operation returns the alignment of a type in bytes.
+    ```mlir
+    %align = gccjit.alignof !gccjit.int<long double> : !gccjit.int<size_t>
+    ```
+  }];
+  let arguments = (ins TypeAttr:$type);
+  let results = (outs GCCJIT_IntType:$align);
+  let assemblyFormat = [{
+    $type `:` type($align) attr-dict
+  }];
+}
+
 def NewArrayOp : GCCJIT_Op<"new_array"> {
   let summary = "Construct an array";
   let description = [{
@@ -604,7 +619,7 @@ def CastOp : GCCJIT_Op<"cast"> {
   }];
 }
 
-def BitCast : GCCJIT_Op<"bitcast"> {
+def BitCastOp : GCCJIT_Op<"bitcast"> {
   let summary = "Bitcast operation";
   let description = [{
     Given an rvalue of T, bitcast it to another type, 
@@ -636,7 +651,7 @@ def LiteralOp : GCCJIT_Op<"literal"> {
     ```
   }];
   let arguments = (ins StringLiteralAttr:$value);
-  let results = (outs GCCJIT_QualifiedType:$result);
+  let results = (outs GCCJIT_PointerType:$result);
   let assemblyFormat = [{
     $value `:` type($result) attr-dict
   }];
@@ -657,6 +672,24 @@ def AddrOp : GCCJIT_Op<"addr"> {
   let results = (outs GCCJIT_PointerType:$result);
   let assemblyFormat = [{
     `(` $lvalue `:` type($lvalue) `)` `:` type($result) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// FnAddr Operation
+//===----------------------------------------------------------------------===//
+def FnAddrOp : GCCJIT_Op<"fn_addr"> {
+  let summary = "Function address";
+  let description = [{
+    The "fn_addr" operation returns the address of a function.
+    ```mlir
+    %res = gccjit.fn_addr @foo : !gccjit.ptr<!gccjit.func<void (!i32)>>
+    ```
+  }];
+  let arguments = (ins SymbolRefAttr:$callee);
+  let results = (outs GCCJIT_PointerType:$result);
+  let assemblyFormat = [{
+    $callee `:` type($result) attr-dict
   }];
 }
 

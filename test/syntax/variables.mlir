@@ -12,11 +12,16 @@ module @test attributes {
             gccjit.return %1 : !i32
     }
 
-    gccjit.global imported @test link_section(".rodata") : !gccjit.lvalue<!i32>
-    gccjit.global internal @test2 array([0, 0, 0, 0]) : !gccjit.lvalue<!gccjit.array<!i32, 1>>
+    gccjit.global imported @test link_section(#gccjit.link_section<".rodata">) : !gccjit.lvalue<!i32>
+    gccjit.global internal @test2 array(#gccjit.byte_array<[0, 0, 0, 0]>) : !gccjit.lvalue<!gccjit.array<!i32, 1>>
     gccjit.global exported @test3 init {
         %0 = gccjit.const #gccjit.zero : !i32
         gccjit.return %0 : !i32
     } : !gccjit.lvalue<!i32>
-    gccjit.global exported @test4 literal ("hello, world!") : !gccjit.lvalue<!gccjit.array<!gccjit.int<char>, 14>>
+    gccjit.global exported @test4 literal (#gccjit.str<"hello, world!">) : !gccjit.lvalue<!gccjit.array<!gccjit.int<char>, 14>>
+    gccjit.global exported @test5 init {
+        %0 = gccjit.get_global @test3 : !gccjit.lvalue<!i32>
+        %addr = gccjit.addr (%0 : !gccjit.lvalue<!i32>) : !gccjit.ptr<!i32>
+        gccjit.return %addr : !gccjit.ptr<!i32>
+    } : !gccjit.lvalue<!gccjit.ptr<!i32>>
 }

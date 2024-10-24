@@ -224,7 +224,7 @@ def RegNameAttr : GCCJIT_Attr<"RegName", "reg_name"> {
     Represents the register name.
   }];
   let assemblyFormat = [{
-    $name
+    `<` $name `>`
   }];
 }
 
@@ -238,7 +238,7 @@ def LinkSectionAttr : GCCJIT_Attr<"LinkSection", "link_section"> {
     Represents the link section.
   }];
   let assemblyFormat = [{
-    $section
+    `<` $section `>`
   }];
 }
 
@@ -252,7 +252,7 @@ def VisibilityAttr : GCCJIT_Attr<"Visibility", "visibility"> {
     Represents the visibility.
   }];
   let assemblyFormat = [{
-    $visibility
+    `<` $visibility `>`
   }];
 }
 
@@ -266,21 +266,21 @@ def StringLiteralAttr : GCCJIT_Attr<"StringLiteral", "str"> {
     Represents the string initializer.
   }];
   let assemblyFormat = [{
-    $initializer
+    `<` $initializer `>`
   }];
 }
 
 //===----------------------------------------------------------------------===//
 // ByteArrayInitializer Attr
 //===----------------------------------------------------------------------===//
-def ByteArrayInitializerAttr : GCCJIT_Attr<"ByteArrayInitializer", "byte_array_initializer"> {
+def ByteArrayInitializerAttr : GCCJIT_Attr<"ByteArrayInitializer", "byte_array"> {
   let summary = "Byte array initializer";
   let parameters = (ins "DenseI8ArrayAttr":$initializer);
   let description = [{
     Represents the byte array initializer.
   }];
   let assemblyFormat = [{
-    $initializer
+    `<` $initializer `>`
   }];
 }
 #endif // MLIR_GCCJIT_IR_GCCJIT_ATTRS

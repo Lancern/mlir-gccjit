@@ -13,14 +13,18 @@
 // limitations under the License.
 
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
+#include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir/IR/Block.h"
+#include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/TypeRange.h"
+#include "mlir/IR/ValueRange.h"
+#include "mlir/IR/Visitors.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -28,8 +32,71 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <utility>
+#include <variant>
 
 namespace mlir::gccjit {
+
+namespace {
+
+class Expr {
+  std::variant<gcc_jit_lvalue *, gcc_jit_rvalue *> value;
+
+public:
+  Expr() : value(static_cast<gcc_jit_lvalue *>(nullptr)) {}
+  Expr(gcc_jit_lvalue *value) : value(value) {}
+  Expr(gcc_jit_rvalue *value) : value(value) {}
+  operator bool() const { return isRValue() || std::get<0>(value) != nullptr; }
+  operator gcc_jit_lvalue *() const {
+    if (isLValue())
+      return std::get<0>(value);
+    llvm_unreachable("not an lvalue");
+  }
+  operator gcc_jit_rvalue *() const {
+    if (isRValue())
+      return std::get<1>(value);
+    return gcc_jit_lvalue_as_rvalue(std::get<0>(value));
+  }
+  bool isLValue() const { return value.index() == 0; }
+  bool isRValue() const { return value.index() == 1; }
+};
+
+class RegionVisitor {
+  GCCJITTranslation &translator;
+  Region &region [[maybe_unused]];
+  llvm::DenseMap<Value, Expr> exprCache;
+  llvm::DenseMap<Value, gcc_jit_lvalue *> variables;
+  llvm::DenseMap<Block *, gcc_jit_block *> blocks;
+
+public:
+  RegionVisitor(GCCJITTranslation &translator, Region &region);
+  gcc_jit_lvalue *queryVariable(Value value);
+  GCCJITTranslation &getTranslator() const;
+  gcc_jit_context *getContext() const;
+  MLIRContext *getMLIRContext() const;
+  void translateIntoContext();
+
+private:
+  Expr visit(Operation *op);
+  void visitAsRValue(ValueRange operands,
+                     llvm::SmallVectorImpl<gcc_jit_rvalue *> &result);
+  gcc_jit_rvalue *visitWithoutCache(ConstantOp op);
+  gcc_jit_rvalue *visitWithoutCache(LiteralOp op);
+  gcc_jit_rvalue *visitWithoutCache(SizeOfOp op);
+  gcc_jit_rvalue *visitWithoutCache(AlignOfOp op);
+  gcc_jit_rvalue *visitWithoutCache(AsRValueOp op);
+  gcc_jit_rvalue *visitWithoutCache(BinaryOp op);
+  gcc_jit_rvalue *visitWithoutCache(UnaryOp op);
+  gcc_jit_rvalue *visitWithoutCache(CompareOp op);
+  gcc_jit_rvalue *visitWithoutCache(CallOp op);
+  gcc_jit_rvalue *visitWithoutCache(CastOp op);
+  gcc_jit_rvalue *visitWithoutCache(BitCastOp op);
+  gcc_jit_rvalue *visitWithoutCache(PtrCallOp op);
+  gcc_jit_rvalue *visitWithoutCache(AddrOp op);
+  gcc_jit_rvalue *visitWithoutCache(FnAddrOp op);
+  gcc_jit_lvalue *visitWithoutCache(GetGlobalOp op);
+};
+
+} // namespace
 
 void GCCJITTranslation::convertTypes(
     mlir::TypeRange types, llvm::SmallVector<gcc_jit_type *> &result) {
@@ -107,6 +174,7 @@ void GCCJITTranslation::translateModuleToGCCJIT(ModuleOp op) {
   moduleOp = op;
   populateGCCJITModuleOptions();
   declareAllFunctionAndGlobals();
+  translateGlobalInitializers();
 }
 
 gcc_jit_location *GCCJITTranslation::getLocation(LocationAttr loc) {
@@ -126,6 +194,14 @@ gcc_jit_location *GCCJITTranslation::getLocation(LocationAttr loc) {
           [&](OpaqueLoc loc) { return getLocation(loc.getFallbackLocation()); })
       .Case([&](UnknownLoc loc) { return nullptr; })
       .Default([](LocationAttr) { return nullptr; });
+}
+
+gcc_jit_lvalue *GCCJITTranslation::getGlobalLValue(SymbolRefAttr symbol) {
+  return globalMap.lookup(symbol);
+}
+
+gcc_jit_function *GCCJITTranslation::getFunction(SymbolRefAttr symbol) {
+  return functionMap.lookup(symbol).fnHandle;
 }
 
 void GCCJITTranslation::populateGCCJITModuleOptions() {
@@ -317,20 +393,319 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
           })
           .Default([](Attribute) { llvm_unreachable("unknown initializer"); });
     }
-    if (!global.getBody().empty()) {
-      llvm_unreachable("NYI");
-    }
+    // if the global has body, we translate them in the next pass
   });
+}
+
+void GCCJITTranslation::translateGlobalInitializers() {
+  moduleOp.walk([&](gccjit::GlobalOp global) {
+    if (global.getBody().empty())
+      return;
+    RegionVisitor visitor(*this, global.getBody());
+    visitor.translateIntoContext();
+  });
+}
+
+///===----------------------------------------------------------------------===///
+/// RegionVisitor
+///===----------------------------------------------------------------------===///
+
+RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
+    : translator(translator), region(region) {
+  size_t variableCount = 0;
+  if (auto funcOp = dyn_cast<gccjit::FuncOp>(region.getParentOp())) {
+    auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
+                                      funcOp.getSymName());
+    auto *function = translator.getFunction(symName);
+    for (auto arg : region.getArguments()) {
+      auto *lvalue = gcc_jit_function_get_param(function, arg.getArgNumber());
+      variables[arg] = gcc_jit_param_as_lvalue(lvalue);
+    }
+    region.walk([&](LocalOp local) {
+      auto *type = translator.convertType(local.getType());
+      auto *loc = translator.getLocation(local.getLoc());
+      auto name = llvm::Twine("var").concat(llvm::Twine(variableCount++)).str();
+      auto *lvalue =
+          gcc_jit_function_new_local(function, loc, type, name.c_str());
+      variables[local] = lvalue;
+    });
+  }
+}
+
+gcc_jit_lvalue *RegionVisitor::queryVariable(Value value) {
+  return variables.lookup(value);
+}
+
+GCCJITTranslation &RegionVisitor::getTranslator() const { return translator; }
+
+gcc_jit_context *RegionVisitor::getContext() const {
+  return translator.getContext();
+}
+
+MLIRContext *RegionVisitor::getMLIRContext() const {
+  return translator.getMLIRContext();
+}
+
+void RegionVisitor::translateIntoContext() {
+  auto *parent = region.getParentOp();
+  if (auto funcOp = dyn_cast<gccjit::FuncOp>(parent)) {
+    (void)funcOp;
+    llvm_unreachable("NYI");
+  }
+  if (auto globalOp = dyn_cast<gccjit::GlobalOp>(parent)) {
+    assert(region.getBlocks().size() == 1 &&
+           "global initializer region should have a single block");
+    Block &block = region.getBlocks().front();
+    auto terminator = cast<gccjit::ReturnOp>(block.getTerminator());
+    auto value = terminator->getOperand(0);
+    auto rvalue = visit(value.getDefiningOp());
+    auto symName = SymbolRefAttr::get(getMLIRContext(), globalOp.getSymName());
+    auto *lvalue = getTranslator().getGlobalLValue(symName);
+    gcc_jit_global_set_initializer_rvalue(lvalue, rvalue);
+    return;
+  }
+  llvm_unreachable("unknown region parent");
+}
+
+Expr RegionVisitor::visit(Operation *op) {
+  if (op->getNumResults() != 1)
+    llvm_unreachable("expected single result operation");
+
+  auto &cached = exprCache.getOrInsertDefault(op->getResult(0));
+  if (!cached)
+    cached = llvm::TypeSwitch<Operation *, Expr>(op)
+                 .Case([&](ConstantOp op) { return visitWithoutCache(op); })
+                 .Case([&](LiteralOp op) { return visitWithoutCache(op); })
+                 .Case([&](SizeOfOp op) { return visitWithoutCache(op); })
+                 .Case([&](AlignOfOp op) { return visitWithoutCache(op); })
+                 .Case([&](AsRValueOp op) { return visitWithoutCache(op); })
+                 .Case([&](BinaryOp op) { return visitWithoutCache(op); })
+                 .Case([&](UnaryOp op) { return visitWithoutCache(op); })
+                 .Case([&](CompareOp op) { return visitWithoutCache(op); })
+                 .Case([&](CallOp op) { return visitWithoutCache(op); })
+                 .Case([&](CastOp op) { return visitWithoutCache(op); })
+                 .Case([&](BitCastOp op) { return visitWithoutCache(op); })
+                 .Case([&](PtrCallOp op) { return visitWithoutCache(op); })
+                 .Case([&](AddrOp op) { return visitWithoutCache(op); })
+                 .Case([&](FnAddrOp op) { return visitWithoutCache(op); })
+                 .Case([&](GetGlobalOp op) { return visitWithoutCache(op); })
+                 .Default([](Operation *) -> Expr {
+                   llvm_unreachable("unknown expression type");
+                 });
+  return cached;
+}
+
+void RegionVisitor::visitAsRValue(
+    ValueRange operands, llvm::SmallVectorImpl<gcc_jit_rvalue *> &result) {
+  for (auto operand : operands)
+    result.push_back(visit(operand.getDefiningOp()));
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(ConstantOp op) {
+  auto type = op.getType();
+  auto *typeHandle = getTranslator().convertType(type);
+  return llvm::TypeSwitch<TypedAttr, gcc_jit_rvalue *>(op.getValue())
+      .Case([&](ZeroAttr attr) {
+        return gcc_jit_context_zero(getContext(), typeHandle);
+      })
+      .Case([&](NullAttr attr) {
+        return gcc_jit_context_null(getContext(), typeHandle);
+      })
+      .Case([&](OneAttr attr) {
+        return gcc_jit_context_one(getContext(), typeHandle);
+      })
+      .Case([&](IntAttr attr) {
+        // TODO: handle signedness and width
+        auto value = attr.getValue();
+        return gcc_jit_context_new_rvalue_from_long(getContext(), typeHandle,
+                                                    value.getZExtValue());
+      })
+      .Case([&](FloatAttr attr) {
+        auto value = attr.getValue();
+        return gcc_jit_context_new_rvalue_from_double(getContext(), typeHandle,
+                                                      value.convertToDouble());
+      })
+      .Default([](TypedAttr) -> gcc_jit_rvalue * {
+        llvm_unreachable("unknown constant type");
+      });
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(LiteralOp op) {
+  auto string = op.getValue().getInitializer().str();
+  return gcc_jit_context_new_string_literal(getContext(), string.c_str());
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(SizeOfOp op) {
+  auto type = op.getType();
+  auto *typeHandle = getTranslator().convertType(type);
+  return gcc_jit_context_new_sizeof(getContext(), typeHandle);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(AlignOfOp op) {
+  llvm_unreachable("GCCJIT does not support alignof yet");
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(AsRValueOp op) {
+  llvm_unreachable("NYI");
+}
+
+static gcc_jit_binary_op convertBinaryOp(BOp kind) {
+  switch (kind) {
+  case BOp::Plus:
+    return GCC_JIT_BINARY_OP_PLUS;
+  case BOp::Minus:
+    return GCC_JIT_BINARY_OP_MINUS;
+  case BOp::Mult:
+    return GCC_JIT_BINARY_OP_MULT;
+  case BOp::Divide:
+    return GCC_JIT_BINARY_OP_DIVIDE;
+  case BOp::Modulo:
+    return GCC_JIT_BINARY_OP_MODULO;
+  case BOp::BitwiseAnd:
+    return GCC_JIT_BINARY_OP_BITWISE_AND;
+  case BOp::BitwiseXor:
+    return GCC_JIT_BINARY_OP_BITWISE_XOR;
+  case BOp::BitwiseOr:
+    return GCC_JIT_BINARY_OP_BITWISE_OR;
+  case BOp::LogicalAnd:
+    return GCC_JIT_BINARY_OP_LOGICAL_AND;
+  case BOp::LogicalOr:
+    return GCC_JIT_BINARY_OP_LOGICAL_OR;
+  case BOp::LShift:
+    return GCC_JIT_BINARY_OP_LSHIFT;
+  case BOp::RShift:
+    return GCC_JIT_BINARY_OP_RSHIFT;
+  }
+  llvm_unreachable("unknown binary operation");
+}
+
+// RValue always has a defining operation
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(BinaryOp op) {
+  auto lhs = visit(op.getLhs().getDefiningOp());
+  auto rhs = visit(op.getRhs().getDefiningOp());
+  auto kind = convertBinaryOp(op.getOp());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  auto *type = getTranslator().convertType(op.getType());
+  return gcc_jit_context_new_binary_op(ctxt, loc, kind, type, lhs, rhs);
+}
+
+static gcc_jit_unary_op convertUnaryOp(UOp kind) {
+  switch (kind) {
+  case UOp::Minus:
+    return GCC_JIT_UNARY_OP_MINUS;
+  case UOp::BitwiseNegate:
+    return GCC_JIT_UNARY_OP_BITWISE_NEGATE;
+  case UOp::LogicalNegate:
+    return GCC_JIT_UNARY_OP_LOGICAL_NEGATE;
+  case UOp::Abs:
+    return GCC_JIT_UNARY_OP_ABS;
+  }
+  llvm_unreachable("unknown unary operation");
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(UnaryOp op) {
+  auto operand = visit(op.getOperand().getDefiningOp());
+  auto kind = convertUnaryOp(op.getOp());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  auto *type = getTranslator().convertType(op.getType());
+  return gcc_jit_context_new_unary_op(ctxt, loc, kind, type, operand);
+}
+
+static gcc_jit_comparison convertCompareOp(CmpOp kind) {
+  switch (kind) {
+  case CmpOp::Eq:
+    return GCC_JIT_COMPARISON_EQ;
+  case CmpOp::Ne:
+    return GCC_JIT_COMPARISON_NE;
+  case CmpOp::Lt:
+    return GCC_JIT_COMPARISON_LT;
+  case CmpOp::Le:
+    return GCC_JIT_COMPARISON_LE;
+  case CmpOp::Gt:
+    return GCC_JIT_COMPARISON_GT;
+  case CmpOp::Ge:
+    return GCC_JIT_COMPARISON_GE;
+  }
+  llvm_unreachable("unknown compare operation");
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(CompareOp op) {
+  auto lhs = visit(op.getLhs().getDefiningOp());
+  auto rhs = visit(op.getRhs().getDefiningOp());
+  auto kind = convertCompareOp(op.getOp());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  return gcc_jit_context_new_comparison(ctxt, loc, kind, lhs, rhs);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(CallOp op) {
+  llvm_unreachable("NYI");
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(CastOp op) {
+  auto operand = visit(op.getOperand().getDefiningOp());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  auto *type = getTranslator().convertType(op.getType());
+  return gcc_jit_context_new_cast(ctxt, loc, operand, type);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(BitCastOp op) {
+  auto operand = visit(op.getOperand().getDefiningOp());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  auto *type = getTranslator().convertType(op.getType());
+  return gcc_jit_context_new_bitcast(ctxt, loc, operand, type);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(PtrCallOp op) {
+  auto callee = visit(op.getCallee().getDefiningOp());
+  llvm::SmallVector<gcc_jit_rvalue *> args;
+  visitAsRValue(op.getArgs(), args);
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  auto *call = gcc_jit_context_new_call_through_ptr(ctxt, loc, callee,
+                                                    args.size(), args.data());
+  gcc_jit_rvalue_set_bool_require_tail_call(call, op.getTail());
+  return call;
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(AddrOp op) {
+  auto lvalue = visit(op.getOperand().getDefiningOp());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  return gcc_jit_lvalue_get_address(lvalue, loc);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitWithoutCache(FnAddrOp op) {
+  auto *fn = getTranslator().getFunction(op.getCallee());
+  assert(fn && "function not found");
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  return gcc_jit_function_get_address(fn, loc);
+}
+
+gcc_jit_lvalue *RegionVisitor::visitWithoutCache(GetGlobalOp op) {
+  auto *lvalue = getTranslator().getGlobalLValue(op.getSym());
+  assert(lvalue && "global not found");
+  return lvalue;
 }
 
 //===----------------------------------------------------------------------===//
 // TranslateModuleToGCCJIT
 //===----------------------------------------------------------------------===//
-
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op) {
   GCCJITTranslation translator;
   translator.translateModuleToGCCJIT(op);
   return translator.takeContext();
+}
+
+///===----------------------------------------------------------------------===///
+/// GCCJITContextDeleter
+///===----------------------------------------------------------------------===///
+void GCCJITContextDeleter::operator()(gcc_jit_context *ctxt) const {
+  if (ctxt)
+    gcc_jit_context_release(ctxt);
 }
 
 } // namespace mlir::gccjit
