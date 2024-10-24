@@ -41,6 +41,14 @@ struct FunctionEntry {
   gcc_jit_function *fnHandle;
   llvm::SmallVector<gcc_jit_param *> params;
 };
+struct StructEntry {
+  gcc_jit_struct *structHandle;
+  llvm::SmallVector<gcc_jit_field *> fields;
+};
+struct UnionEntry {
+  gcc_jit_type *unionHandle;
+  llvm::SmallVector<gcc_jit_field *> fields;
+};
 
 struct Translator {
   // Members
@@ -48,6 +56,8 @@ struct Translator {
   ::mlir::gccjit::GCCJITTypeConverter typeConverter;
   llvm::DenseMap<mlir::SymbolRefAttr, FunctionEntry> functionMap;
   llvm::DenseMap<mlir::SymbolRefAttr, gcc_jit_lvalue *> globalMap;
+  llvm::DenseMap<mlir::Type, StructEntry> structMap;
+  llvm::DenseMap<mlir::Type, UnionEntry> unionMap;
   ModuleOp moduleOp;
 
   // Codegen status
