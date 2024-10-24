@@ -35,7 +35,7 @@ namespace mlir::gccjit {
 // Translator declaration
 //===----------------------------------------------------------------------===//
 
-namespace [[gnu::visibility("hidden")]] impl {
+namespace impl {
 
 struct FunctionEntry {
   gcc_jit_function *fnHandle;
@@ -195,6 +195,7 @@ gcc_jit_function_kind Translator::convertFnKind(FnKind kind) {
   case FnKind::AlwaysInline:
     return GCC_JIT_FUNCTION_ALWAYS_INLINE;
   }
+  llvm_unreachable("unknown function kind");
 }
 
 static void processFunctionAttrs(gccjit::FuncOp func,
@@ -264,6 +265,7 @@ static gcc_jit_global_kind convertGlobalKind(GlbKind kind) {
   case GlbKind::Imported:
     return GCC_JIT_GLOBAL_IMPORTED;
   }
+  llvm_unreachable("unknown global kind");
 }
 
 static gcc_jit_tls_model convertTLSModel(TLSModelEnum model) {
@@ -279,6 +281,7 @@ static gcc_jit_tls_model convertTLSModel(TLSModelEnum model) {
   case TLSModelEnum::None:
     return GCC_JIT_TLS_MODEL_NONE;
   }
+  llvm_unreachable("unknown TLS model");
 }
 
 void Translator::declareAllFunctionAndGlobals() {
