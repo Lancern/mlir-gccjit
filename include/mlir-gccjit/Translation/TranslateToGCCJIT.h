@@ -14,52 +14,71 @@
 
 #ifndef MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 #define MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
+
 #include "mlir/IR/BuiltinOps.h"
-#include <libgccjit.h>
+#include "mlir/IR/Location.h"
+#include "mlir/IR/MLIRContext.h"
+#include "llvm/ADT/DenseMap.h"
+
+#include "libgccjit.h"
+
 namespace mlir::gccjit {
 
 void registerToGCCJITGimpleTranslation();
 void registerToGCCJITReproducerTranslation();
 
-struct GCCJITContextReleaser {
-  void operator()(gcc_jit_context *ctxt) const {
-    gcc_jit_context_release(ctxt);
-  }
+struct GCCJITContextDeleter {
+  void operator()(gcc_jit_context *ctxt) const;
 };
-using GCCJITContext = std::unique_ptr<gcc_jit_context, GCCJITContextReleaser>;
+using GCCJITContext = std::unique_ptr<gcc_jit_context, GCCJITContextDeleter>;
 
-namespace impl {
-struct GCCJITTypeConverter;
-struct Translator;
-} // namespace impl
+class GCCJITTranslation {
+public:
+  GCCJITTranslation();
+  ~GCCJITTranslation();
 
-class Translator;
-class GCCJITTypeConverter {
-  std::unique_ptr<impl::GCCJITTypeConverter> impl;
+  gcc_jit_context *getContext() const;
+  GCCJITContext takeContext();
+
+  MLIRContext *getMLIRContext() const { return moduleOp->getContext(); }
+
+  void translateModuleToGCCJIT(ModuleOp op);
+
+  gcc_jit_type *convertType(Type type);
+  void convertTypes(TypeRange types, llvm::SmallVector<gcc_jit_type *> &result);
+
+  gcc_jit_location *getLocation(LocationAttr loc);
 
 private:
-  GCCJITTypeConverter(std::unique_ptr<impl::GCCJITTypeConverter>);
+  struct FunctionEntry {
+    gcc_jit_function *fnHandle;
+    llvm::SmallVector<gcc_jit_param *> params;
+  };
 
-public:
-  void convertTypes(mlir::TypeRange types,
-                    llvm::SmallVectorImpl<gcc_jit_type *> &result);
-  gcc_jit_type *convertType(mlir::Type type);
-  Translator &getTranslator();
-  friend impl::Translator;
-};
+  struct StructEntry {
+    gcc_jit_struct *structHandle;
+    llvm::SmallVector<gcc_jit_field *> fields;
+  };
 
-class Translator {
-  std::unique_ptr<impl::Translator> impl;
+  struct UnionEntry {
+    gcc_jit_type *unionHandle;
+    llvm::SmallVector<gcc_jit_field *> fields;
+  };
 
-public:
-  gcc_jit_context *getContext() const;
-  Translator();
-  GCCJITContext takeContext();
-  GCCJITTypeConverter &getTypeConverter();
-  void translateModuleToGCCJIT(ModuleOp op);
+  gcc_jit_context *ctxt;
+  ModuleOp moduleOp;
+  llvm::DenseMap<SymbolRefAttr, FunctionEntry> functionMap;
+  llvm::DenseMap<SymbolRefAttr, gcc_jit_lvalue *> globalMap;
+  llvm::DenseMap<Type, gcc_jit_type *> typeMap;
+  llvm::DenseMap<Type, StructEntry> structMap;
+  llvm::DenseMap<Type, UnionEntry> unionMap;
+
+  void populateGCCJITModuleOptions();
+  void declareAllFunctionAndGlobals();
 };
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op);
+
 } // namespace mlir::gccjit
 
 #endif // MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H

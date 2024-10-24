@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
-#include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
@@ -21,88 +20,24 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Location.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/TypeRange.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <utility>
+
 namespace mlir::gccjit {
 
-//===----------------------------------------------------------------------===//
-// Translator declaration
-//===----------------------------------------------------------------------===//
-
-namespace impl {
-
-struct FunctionEntry {
-  gcc_jit_function *fnHandle;
-  llvm::SmallVector<gcc_jit_param *> params;
-};
-struct StructEntry {
-  gcc_jit_struct *structHandle;
-  llvm::SmallVector<gcc_jit_field *> fields;
-};
-struct UnionEntry {
-  gcc_jit_type *unionHandle;
-  llvm::SmallVector<gcc_jit_field *> fields;
-};
-
-struct Translator {
-  // Members
-  gcc_jit_context *ctxt;
-  ::mlir::gccjit::GCCJITTypeConverter typeConverter;
-  llvm::DenseMap<mlir::SymbolRefAttr, FunctionEntry> functionMap;
-  llvm::DenseMap<mlir::SymbolRefAttr, gcc_jit_lvalue *> globalMap;
-  llvm::DenseMap<mlir::Type, StructEntry> structMap;
-  llvm::DenseMap<mlir::Type, UnionEntry> unionMap;
-  ModuleOp moduleOp;
-
-  // Codegen status
-  gcc_jit_function *currentFunction = nullptr;
-  llvm::DenseMap<Block *, gcc_jit_block *> blockMap;
-  llvm::DenseMap<Value, gcc_jit_lvalue *> localVarMap;
-  llvm::DenseMap<Value, gcc_jit_rvalue *> valueMap;
-  gcc_jit_block *currentBlock = nullptr;
-
-  // APIs
-  Translator();
-  ~Translator();
-  void populateGCCJITModuleOptions();
-  void declareAllFunctionAndGlobals();
-  static gcc_jit_function_kind convertFnKind(FnKind kind);
-  MLIRContext *getMLIRContext();
-  gcc_jit_location *getLocation(LocationAttr loc);
-};
-
-} // namespace impl
-
-//===----------------------------------------------------------------------===//
-// GCCJITTypeConverter
-//===----------------------------------------------------------------------===//
-namespace [[gnu::visibility("hidden")]] impl {
-struct GCCJITTypeConverter {
-  llvm::DenseMap<mlir::Type, gcc_jit_type *> typeMap;
-  Translator &translator;
-  GCCJITTypeConverter(Translator &translator) : translator(translator) {}
-  gcc_jit_context *getContext() const { return translator.ctxt; }
-};
-} // namespace impl
-
-GCCJITTypeConverter::GCCJITTypeConverter(
-    std::unique_ptr<impl::GCCJITTypeConverter> impl)
-    : impl(std::move(impl)) {}
-
-void GCCJITTypeConverter::convertTypes(
-    mlir::TypeRange types, llvm::SmallVectorImpl<gcc_jit_type *> &result) {
+void GCCJITTranslation::convertTypes(
+    mlir::TypeRange types, llvm::SmallVector<gcc_jit_type *> &result) {
   for (auto type : types)
     result.push_back(convertType(type));
 }
 
-gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
-  auto &typeMap = impl->typeMap;
+gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
   if (auto it = typeMap.find(type); it != typeMap.end())
     return it->second;
   auto *res = llvm::TypeSwitch<mlir::Type, gcc_jit_type *>(type)
@@ -125,25 +60,24 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
                   })
                   .Case([&](gccjit::IntType t) {
                     auto kind = t.getKind();
-                    return gcc_jit_context_get_type(impl->getContext(), kind);
+                    return gcc_jit_context_get_type(ctxt, kind);
                   })
                   .Case([&](gccjit::FloatType t) {
                     auto kind = t.getKind();
-                    return gcc_jit_context_get_type(impl->getContext(), kind);
+                    return gcc_jit_context_get_type(ctxt, kind);
                   })
                   .Case([&](gccjit::ComplexType t) {
                     auto kind = t.getKind();
-                    return gcc_jit_context_get_type(impl->getContext(), kind);
+                    return gcc_jit_context_get_type(ctxt, kind);
                   })
                   .Case([&](gccjit::VoidType t) {
-                    return gcc_jit_context_get_type(impl->getContext(),
-                                                    GCC_JIT_TYPE_VOID);
+                    return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_VOID);
                   })
                   .Case([&](gccjit::ArrayType t) {
                     auto *elemType = convertType(t.getElementType());
                     auto size = t.getSize();
-                    return gcc_jit_context_new_array_type(
-                        impl->getContext(), nullptr, elemType, size);
+                    return gcc_jit_context_new_array_type(ctxt, nullptr,
+                                                          elemType, size);
                   })
                   .Case([&](gccjit::VectorType t) {
                     auto *elemType = convertType(t.getElementType());
@@ -155,22 +89,46 @@ gcc_jit_type *GCCJITTypeConverter::convertType(mlir::Type type) {
   return res;
 }
 
-//===----------------------------------------------------------------------===//
-// Translator implementation
-//===----------------------------------------------------------------------===//
-namespace [[gnu::visibility("hidden")]] impl {
+GCCJITTranslation::GCCJITTranslation() : ctxt(gcc_jit_context_acquire()) {}
 
-Translator::Translator()
-    : ctxt(gcc_jit_context_acquire()),
-      typeConverter(std::make_unique<GCCJITTypeConverter>(*this)) {}
-
-Translator::~Translator() {
+GCCJITTranslation::~GCCJITTranslation() {
   if (ctxt) {
     gcc_jit_context_release(ctxt);
   }
 }
 
-void Translator::populateGCCJITModuleOptions() {
+GCCJITContext GCCJITTranslation::takeContext() {
+  return GCCJITContext(std::exchange(ctxt, nullptr));
+}
+
+gcc_jit_context *GCCJITTranslation::getContext() const { return ctxt; }
+
+void GCCJITTranslation::translateModuleToGCCJIT(ModuleOp op) {
+  moduleOp = op;
+  populateGCCJITModuleOptions();
+  declareAllFunctionAndGlobals();
+}
+
+gcc_jit_location *GCCJITTranslation::getLocation(LocationAttr loc) {
+  if (!loc)
+    return nullptr;
+  return llvm::TypeSwitch<LocationAttr, gcc_jit_location *>(loc)
+      .Case([&](FileLineColLoc loc) {
+        return gcc_jit_context_new_location(ctxt,
+                                            loc.getFilename().str().c_str(),
+                                            loc.getLine(), loc.getColumn());
+      })
+      .Case([&](CallSiteLoc loc) { return getLocation(loc.getCaller()); })
+      .Case(
+          [&](FusedLoc loc) { return getLocation(loc.getLocations().front()); })
+      .Case([&](NameLoc loc) { return getLocation(loc.getChildLoc()); })
+      .Case(
+          [&](OpaqueLoc loc) { return getLocation(loc.getFallbackLocation()); })
+      .Case([&](UnknownLoc loc) { return nullptr; })
+      .Default([](LocationAttr) { return nullptr; });
+}
+
+void GCCJITTranslation::populateGCCJITModuleOptions() {
   for (auto &attr : moduleOp->getAttrs()) {
     if (attr.getName() == "gccjit.prog_name") {
       if (auto strAttr = dyn_cast<StringAttr>(attr.getValue()))
@@ -194,7 +152,7 @@ void Translator::populateGCCJITModuleOptions() {
   }
 }
 
-gcc_jit_function_kind Translator::convertFnKind(FnKind kind) {
+static gcc_jit_function_kind convertFnKind(FnKind kind) {
   switch (kind) {
   case FnKind::Exported:
     return GCC_JIT_FUNCTION_EXPORTED;
@@ -294,13 +252,13 @@ static gcc_jit_tls_model convertTLSModel(TLSModelEnum model) {
   llvm_unreachable("unknown TLS model");
 }
 
-void Translator::declareAllFunctionAndGlobals() {
+void GCCJITTranslation::declareAllFunctionAndGlobals() {
   moduleOp.walk([&](gccjit::FuncOp func) {
     auto type = func.getFunctionType();
     llvm::SmallVector<gcc_jit_type *> paramTypes;
     llvm::SmallVector<gcc_jit_param *> params;
-    typeConverter.convertTypes(type.getInputs(), paramTypes);
-    auto *returnType = typeConverter.convertType(type.getReturnType());
+    convertTypes(type.getInputs(), paramTypes);
+    auto *returnType = convertType(type.getReturnType());
     auto kind = convertFnKind(func.getFnKind());
     auto name = func.getSymName().str();
     auto enumerated = llvm::enumerate(paramTypes);
@@ -322,7 +280,7 @@ void Translator::declareAllFunctionAndGlobals() {
   });
   moduleOp.walk([&](gccjit::GlobalOp global) {
     auto type = global.getType();
-    auto *typeHandle = typeConverter.convertType(type);
+    auto *typeHandle = convertType(type);
     auto name = global.getSymName().str();
     auto nameAttr = SymbolRefAttr::get(getMLIRContext(), name);
     auto kind = convertGlobalKind(global.getGlbKind());
@@ -360,56 +318,17 @@ void Translator::declareAllFunctionAndGlobals() {
           .Default([](Attribute) { llvm_unreachable("unknown initializer"); });
     }
     if (!global.getBody().empty()) {
-      // TODO
+      llvm_unreachable("NYI");
     }
   });
 }
-
-MLIRContext *Translator::getMLIRContext() { return moduleOp.getContext(); }
-
-gcc_jit_location *Translator::getLocation(LocationAttr loc) {
-  if (!loc)
-    return nullptr;
-  return llvm::TypeSwitch<LocationAttr, gcc_jit_location *>(loc)
-      .Case([&](FileLineColLoc loc) {
-        return gcc_jit_context_new_location(ctxt,
-                                            loc.getFilename().str().c_str(),
-                                            loc.getLine(), loc.getColumn());
-      })
-      .Case([&](CallSiteLoc loc) { return getLocation(loc.getCaller()); })
-      .Case(
-          [&](FusedLoc loc) { return getLocation(loc.getLocations().front()); })
-      .Case([&](NameLoc loc) { return getLocation(loc.getChildLoc()); })
-      .Case(
-          [&](OpaqueLoc loc) { return getLocation(loc.getFallbackLocation()); })
-      .Case([&](UnknownLoc loc) { return nullptr; })
-      .Default([](LocationAttr) { return nullptr; });
-}
-
-} // namespace impl
-
-GCCJITContext Translator::takeContext() {
-  auto *ctxt = impl->ctxt;
-  impl->ctxt = nullptr;
-  return GCCJITContext(ctxt);
-}
-gcc_jit_context *Translator::getContext() const { return impl->ctxt; }
-::mlir::gccjit::GCCJITTypeConverter &Translator::getTypeConverter() {
-  return impl->typeConverter;
-}
-void Translator::translateModuleToGCCJIT(ModuleOp op) {
-  impl->moduleOp = op;
-  impl->populateGCCJITModuleOptions();
-  impl->declareAllFunctionAndGlobals();
-}
-Translator::Translator() : impl(std::make_unique<impl::Translator>()) {}
 
 //===----------------------------------------------------------------------===//
 // TranslateModuleToGCCJIT
 //===----------------------------------------------------------------------===//
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op) {
-  Translator translator;
+  GCCJITTranslation translator;
   translator.translateModuleToGCCJIT(op);
   return translator.takeContext();
 }
