@@ -471,7 +471,7 @@ Expr RegionVisitor::visit(Operation *op) {
   if (op->getNumResults() != 1)
     llvm_unreachable("expected single result operation");
 
-  auto &cached = exprCache.getOrInsertDefault(op->getResult(0));
+  auto &cached = exprCache[op->getResult(0)];
   if (!cached)
     cached = llvm::TypeSwitch<Operation *, Expr>(op)
                  .Case([&](ConstantOp op) { return visitWithoutCache(op); })
@@ -546,7 +546,8 @@ gcc_jit_rvalue *RegionVisitor::visitWithoutCache(AlignOfOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitWithoutCache(AsRValueOp op) {
-  llvm_unreachable("NYI");
+  auto lvalue = visit(op.getLvalue().getDefiningOp());
+  return gcc_jit_lvalue_as_rvalue(lvalue);
 }
 
 static gcc_jit_binary_op convertBinaryOp(BOp kind) {
