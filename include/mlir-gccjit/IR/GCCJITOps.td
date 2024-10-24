@@ -742,4 +742,42 @@ def CommentOp : GCCJIT_Op<"comment", [Pure]> {
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// Access field
+//===----------------------------------------------------------------------===//
+def AccessFieldOp : GCCJIT_Op<"access_field"> {
+  let summary = "Access field operation";
+  let description = [{
+    The "access_field" operation represents an access field operation.
+    LValue field access returns an lvalue.
+    RValue field access returns an rvalue.
+    ```mlir
+    %res0 = gccjit.access_field %struct [0] : !gccjit.lvalue<!gccjit.struct<(!i32, !i32)>> -> !gccjit.lvalue<!i32>
+    %res1 = gccjit.access_field %struct [1] : !gccjit.struct<(!i32, !i32)> -> !i32
+    ```
+  }];
+  let arguments = (ins AnyType:$composite, IndexAttr:$field);
+  let results = (outs GCCJIT_LValueType:$result);
+  let assemblyFormat = [{
+    $composite `[` $field `]` `:` functional-type(operands, results) attr-dict
+  }];
+}
+
+//===----------------------------------------------------------------------===//
+// Deref Field
+//===----------------------------------------------------------------------===//
+def DerefFieldOp : GCCJIT_Op<"deref_field"> {
+  let summary = "Dereference field operation";
+  let description = [{
+    The "deref_field" operation represents a dereference field operation.
+    ```mlir
+    %res = gccjit.deref_field %ptr [0] : !gccjit.ptr<!gccjit.struct<(!i32, !i32)>> -> !gccjit.lvalue<!i32>
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$ptr, IndexAttr:$field);
+  let results = (outs GCCJIT_LValueType:$result);
+  let assemblyFormat = [{
+    $ptr `[` $field `]` `:` functional-type(operands, results) attr-dict
+  }];
+}
 #endif // GCCJIT_OPS
