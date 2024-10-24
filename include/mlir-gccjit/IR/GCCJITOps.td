@@ -566,8 +566,8 @@ def CallOp : GCCJIT_Op<"call"> {
   }];
   let arguments = (ins SymbolRefAttr:$callee, 
     Variadic<AnyType>:$args, 
-    OptionalAttr<UnitAttr>:$tail,
-    OptionalAttr<UnitAttr>:$builtin
+    UnitAttr:$tail,
+    UnitAttr:$builtin
   );
   let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{

@@ -642,7 +642,22 @@ gcc_jit_rvalue *RegionVisitor::visitWithoutCache(CompareOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitWithoutCache(CallOp op) {
-  llvm_unreachable("NYI");
+  gcc_jit_function *callee = nullptr;
+  if (op.getBuiltin()) {
+    callee = gcc_jit_context_get_builtin_function(
+        getContext(), op.getCallee().getLeafReference().str().c_str());
+  } else {
+    callee = getTranslator().getFunction(op.getCallee());
+  }
+  assert(callee && "function not found");
+  llvm::SmallVector<gcc_jit_rvalue *> args;
+  visitAsRValue(op.getArgs(), args);
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *ctxt = getContext();
+  auto *call =
+      gcc_jit_context_new_call(ctxt, loc, callee, args.size(), args.data());
+  gcc_jit_rvalue_set_bool_require_tail_call(call, op.getTail());
+  return call;
 }
 
 gcc_jit_rvalue *RegionVisitor::visitWithoutCache(CastOp op) {
