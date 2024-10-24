@@ -291,9 +291,11 @@ def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
   );
   let results = (outs GCCJIT_LValueType:$var);
   let assemblyFormat = [{
-    (`reg` `(` $reg_name^ `)`)?
-    (`align` `(` $alignment^ `)`)?
-    (`tls_model` `(` $tls_model^ `)`)?
+    oilist ( 
+      `reg` `(` $reg_name `)` |
+      `align` `(` $alignment `)` |
+      `tls_model` `(` $tls_model `)`
+    )
     `:` type($var) attr-dict
   }];
 }
@@ -363,12 +365,12 @@ def SizeOfOp : GCCJIT_Op<"sizeof", [Pure]> {
   }];
 }
 
-def ArrayOp : GCCJIT_Op<"array"> {
+def NewArrayOp : GCCJIT_Op<"new_array"> {
   let summary = "Construct an array";
   let description = [{
     The "array" operation constructs an array from a list of elements.
     ```mlir
-    %array = gccjit.array !gccjit.array<i32, 3> [%1, %2, %3]
+    %array = gccjit.new_array !gccjit.array<i32, 3> [%1, %2, %3]
     ```
   }];
   let arguments = (ins Variadic<AnyType>:$elements);
@@ -378,12 +380,51 @@ def ArrayOp : GCCJIT_Op<"array"> {
   }];
 }
 
-def VectorOp : GCCJIT_Op<"vector"> {
+def NewStructOp : GCCJIT_Op<"new_struct"> {
+  let summary = "Construct a struct";
+  let description = [{
+    The "struct" operation constructs a struct from a list of elements.
+    Each value has to have the same unqualified type as the field it is applied to.
+    ```mlir
+    %struct = gccjit.new_struct [0, 1] [%1, %2] : (!i32, !i32) -> !gccjit.struct<(!i32, !i32)>
+    ```
+  }];
+  let arguments = (ins 
+    DenseI32ArrayAttr:$indices,
+    Variadic<AnyType>:$elements
+  );
+  // TODO: Add support for struct type.
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+     $indices `[` $elements `]` `:` functional-type(operands, results) attr-dict
+  }];
+}
+
+def NewUnionOp : GCCJIT_Op<"new_union"> {
+  let summary = "Construct a union";
+  let description = [{
+    The "union" operation constructs a union from a list of elements.
+    Each value has to have the same unqualified type as the field it is applied to.
+    ```mlir
+    %union = gccjit.new_union %1 at 0 : !i32, !gccjit.union<(!i32)> 
+    ```
+  }];
+  let arguments = (ins 
+    AnyType:$element,
+    IndexAttr:$index
+  );
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+     $element `at` $index `:` type($element) `,` type($result) attr-dict
+  }];
+}
+
+def NewVectorOp : GCCJIT_Op<"new_vector"> {
   let summary = "Construct a vector";
   let description = [{
     The "vector" operation constructs a vector from a list of elements.
     ```mlir
-    %vector = gccjit.vector !gccjit.vector<i32, 4> [%1, %2, %3, %4]
+    %vector = gccjit.new_vector !gccjit.vector<i32, 4> [%1, %2, %3, %4]
     ```
   }];
   let arguments = (ins Variadic<AnyType>:$elements);
