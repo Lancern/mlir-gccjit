@@ -274,7 +274,7 @@ struct ParseNamedUnitAttr {
   std::string_view name;
   constexpr ParseNamedUnitAttr(std::string_view name) : name(name) {}
   ParseResult operator()(OpAsmParser &parser, UnitAttr &attr) const {
-    if (parser.parseOptionalKeyword(name))
+    if (parser.parseOptionalKeyword(name).succeeded())
       attr = UnitAttr::get(parser.getContext());
     return success();
   }
