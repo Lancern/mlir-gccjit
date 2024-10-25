@@ -30,7 +30,7 @@ def GCCJITMaterializeRValue : Pass<"gccjit-materialize-rvalue", "::mlir::gccjit:
     Definition (Constant RValue): An RValue expression is constant if and only if it is created by
     a constant operation.
 
-    The materialization criteria are as follows:
+    The automatic materialization criteria are as follows:
     - If the RValue expression is a mere constant, then it will not be materialized.
     - Otherwise:
         - if the RValue has a user that is not local to the block, then the expression is materialized.
@@ -47,9 +47,15 @@ def GCCJITMaterializeRValue : Pass<"gccjit-materialize-rvalue", "::mlir::gccjit:
 
     By materialization, we mean that a local variable will be created and singly assigned by the RValue expression. All
     future uses of the RValue expression will be replaced by the local variable.
+
+    To obtain a one-to-one mapping between SSA variable and GCCJIT variable, use this pass with option `full=true`. When such option is enabled,
+    each instruction with result is materialized and each instruction without result is evaluated step-by-step.
   }];
   let constructor = "::mlir::gccjit::createGCCJITMaterializeRValuePass()";
   let dependentDialects = ["::mlir::gccjit::GCCJITDialect"];
+  let options = [
+    Option<"full", "full", "bool", /*default=*/"false", "Full Materialization">
+  ];
 }
 
 #endif // MLIR_GCCJIT_PASSES

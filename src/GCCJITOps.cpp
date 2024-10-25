@@ -284,7 +284,7 @@ struct PrintNamedUnitAttr {
   std::string_view name;
   constexpr PrintNamedUnitAttr(std::string_view name) : name(name) {}
   void operator()(OpAsmPrinter &p, Operation *, UnitAttr attr) const {
-    if (!attr)
+    if (attr)
       p << name;
   }
 };

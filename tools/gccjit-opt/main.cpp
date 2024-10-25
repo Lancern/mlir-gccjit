@@ -16,10 +16,10 @@
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllExtensions.h"
 #include "mlir/InitAllPasses.h"
-#include "mlir/Pass/PassRegistry.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
 #include "mlir-gccjit/IR/GCCJITDialect.h"
+#include "mlir-gccjit/Passes.h"
 
 int main(int argc, char **argv) {
   mlir::DialectRegistry registry;
@@ -27,6 +27,7 @@ int main(int argc, char **argv) {
   registry.insert<mlir::gccjit::GCCJITDialect>();
   mlir::registerAllExtensions(registry);
   mlir::registerAllPasses();
+  mlir::gccjit::registerGCCJITPasses();
   return failed(mlir::MlirOptMain(
       argc, argv, "GCCJIT analysis and optimization driver\n", registry));
 }

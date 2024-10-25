@@ -265,14 +265,16 @@ def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
   let arguments = (ins 
     OptionalAttr<RegNameAttr>:$reg_name,
     OptionalAttr<IndexAttr>:$alignment,
-    OptionalAttr<TLSModelAttr>:$tls_model
+    OptionalAttr<TLSModelAttr>:$tls_model,
+    OptionalAttr<StringLiteralAttr>:$var_name
   );
   let results = (outs GCCJIT_LValueType:$var);
   let assemblyFormat = [{
     oilist ( 
-      `reg` `(` $reg_name `)` |
-      `align` `(` $alignment `)` |
-      `tls_model` `(` $tls_model `)`
+      `reg` `(` qualified($reg_name) `)` |
+      `align` `(` qualified($alignment) `)` |
+      `tls_model` `(` qualified($tls_model) `)` |
+      `var_name` `(` qualified($var_name) `)`
     )
     `:` type($var) attr-dict
   }];
@@ -312,11 +314,11 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
     $glb_kind
     $sym_name
     oilist ( 
-      `reg` `(` $reg_name `)` |
-      `align` `(` $alignment `)` |
-      `tls_model` `(` $tls_model `)` |
-      `link_section` `(` $link_section `)` |
-      `visibility` `(` $visibility `)`
+      `reg` `(` qualified($reg_name) `)` |
+      `align` `(` qualified($alignment) `)` |
+      `tls_model` `(` qualified($tls_model) `)` |
+      `link_section` `(` qualified($link_section) `)` |
+      `visibility` `(` qualified($visibility) `)`
     )
     custom<GlobalInitializer>($initializer, $body) `:` $type attr-dict
   }];

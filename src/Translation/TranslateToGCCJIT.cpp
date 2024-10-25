@@ -17,6 +17,7 @@
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
+#include "mlir/IR/AsmState.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
 #include "mlir/IR/BuiltinAttributes.h"
@@ -31,6 +32,7 @@
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <algorithm>
 #include <utility>
 #include <variant>
 
@@ -355,7 +357,7 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
                      auto index = pair.index();
                      auto type = pair.value();
                      auto name =
-                         llvm::Twine("arg").concat(llvm::Twine(index)).str();
+                         llvm::Twine("__arg").concat(llvm::Twine(index)).str();
                      return gcc_jit_context_new_param(
                          ctxt, /*todo: location*/ nullptr, type, name.c_str());
                    });
@@ -424,7 +426,6 @@ void GCCJITTranslation::translateGlobalInitializers() {
 
 RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
     : translator(translator), region(region) {
-  size_t variableCount = 0;
   if (auto funcOp = dyn_cast<gccjit::FuncOp>(region.getParentOp())) {
     auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
                                       funcOp.getSymName());
@@ -433,19 +434,37 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
       auto *lvalue = gcc_jit_function_get_param(function, arg.getArgNumber());
       exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
     }
+    AsmState asmState(funcOp);
     region.walk([&](LocalOp local) {
       auto *type = translator.convertType(local.getType());
       auto *loc = translator.getLocation(local.getLoc());
-      auto name = llvm::Twine("var").concat(llvm::Twine(variableCount++)).str();
+      std::string name;
+      if (!local.getVarName()) {
+        std::string buffer;
+        llvm::raw_string_ostream bufferStream(buffer);
+        local.getResult().printAsOperand(bufferStream, asmState);
+        bufferStream.flush();
+        name = "__var";
+        for (auto &c : buffer)
+          if (isalnum(c))
+            name.push_back(c);
+      } else {
+        name = local.getVarName()->getInitializer().str();
+      }
       auto *lvalue =
           gcc_jit_function_new_local(function, loc, type, name.c_str());
       exprCache[local] = lvalue;
     });
-    size_t blockCount = 0;
     for (auto &block : region) {
-      auto *blk = gcc_jit_function_new_block(
-          function,
-          llvm::Twine("bb").concat(llvm::Twine(blockCount++)).str().c_str());
+      std::string buffer;
+      llvm::raw_string_ostream bufferStream(buffer);
+      block.printAsOperand(bufferStream, asmState);
+      bufferStream.flush();
+      std::string name;
+      for (auto &c : buffer)
+        if (isalnum(c))
+          name.push_back(c);
+      auto *blk = gcc_jit_function_new_block(function, name.c_str());
       blocks[&block] = blk;
     }
   }
