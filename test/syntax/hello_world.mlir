@@ -11,9 +11,7 @@ module @test attributes {
     gccjit.func imported @puts(!str) -> !i32
     gccjit.func exported @main() -> !i32 {
         %1 = gccjit.literal <"hello, world!\n"> : !str
-        %2 = gccjit.call @puts(%1) : (!str) -> !i32
-        gccjit.eval (%2 : !i32)
-
+        %2 = gccjit.call @puts(%1) : (!str) -> !i32 { gccjit.eval }
         %0 = gccjit.const #gccjit.zero : !i32
         gccjit.return %0 : !i32
     }

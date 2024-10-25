@@ -99,7 +99,6 @@ private:
   void visitReturnOp(gcc_jit_block *blk, ReturnOp op);
   void visitSwitchOp(gcc_jit_block *blk, SwitchOp op);
   void visitJumpOp(gcc_jit_block *blk, JumpOp op);
-  void visitEvalOp(gcc_jit_block *blk, EvalOp op);
 };
 
 } // namespace
@@ -474,8 +473,22 @@ void RegionVisitor::translateIntoContext() {
             .Case([&](ReturnOp op) { visitReturnOp(blk, op); })
             .Case([&](SwitchOp op) { visitSwitchOp(blk, op); })
             .Case([&](JumpOp op) { visitJumpOp(blk, op); })
-            .Case([&](EvalOp op) { visitEvalOp(blk, op); })
-            .Default([](auto) { return; });
+            .Default([&](Operation *op) {
+              if (op->hasAttr("gccjit.eval")) {
+                auto *loc = translator.getLocation(op->getLoc());
+                if (op->getNumResults() == 1) {
+                  auto result = op->getResult(0);
+                  auto rvalue = visitExpr(result);
+                  gcc_jit_block_add_eval(blk, loc, rvalue);
+                } else if (auto callOp = dyn_cast<CallOp>(op)) {
+                  auto *funcCall = visitExprWithoutCache(callOp);
+                  gcc_jit_block_add_eval(blk, loc, funcCall);
+                } else if (auto ptrCallOp = dyn_cast<PtrCallOp>(op)) {
+                  auto *funcCall = visitExprWithoutCache(ptrCallOp);
+                  gcc_jit_block_add_eval(blk, loc, funcCall);
+                }
+              }
+            });
       });
     }
     return;
@@ -794,11 +807,6 @@ void RegionVisitor::visitJumpOp(gcc_jit_block *blk, JumpOp op) {
   auto *dst = blocks[op.getDest()];
   gcc_jit_block_end_with_jump(blk, getTranslator().getLocation(op.getLoc()),
                               dst);
-}
-
-void RegionVisitor::visitEvalOp(gcc_jit_block *blk, EvalOp op) {
-  auto value = visitExpr(op.getOperand());
-  gcc_jit_block_add_eval(blk, getTranslator().getLocation(op.getLoc()), value);
 }
 
 void GCCJITTranslation::translateFunctions() {

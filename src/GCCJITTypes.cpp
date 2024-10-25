@@ -507,3 +507,7 @@ llvm::StringRef mlir::gccjit::UnionType::getRecordName() const {
 mlir::ArrayAttr mlir::gccjit::UnionType::getRecordFields() const {
   return getFields();
 }
+
+bool mlir::gccjit::UnionType::isUnion() const { return true; }
+
+bool mlir::gccjit::StructType::isUnion() const { return false; }

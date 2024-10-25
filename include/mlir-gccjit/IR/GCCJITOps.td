@@ -255,28 +255,6 @@ def SwitchOp : GCCJIT_Op<"switch", [Terminator, Pure, ParentOneOf<["FuncOp"]>]> 
 }
 
 //===----------------------------------------------------------------------===//
-// EvalOp
-//===----------------------------------------------------------------------===//
-def EvalOp : GCCJIT_Op<"eval"> {
-  let summary = "Evaluate an expression";
-  let description = [{
-    The "eval" operation evaluates an expression.
-    RValue expressions are lazy in GCCJIT. That is, if there is no side effect
-    associated with an expression, related gimple is never constructed. One can
-    force the evaluation to happen inside a block by using the "eval" operation.
-
-    Roughtly, this is equivalent to the following C code:
-    ```c
-    (void)expr;
-    ```
-  }];
-  let arguments = (ins AnyType:$expr);
-  let assemblyFormat = [{
-    `(` $expr `:` type($expr) `)` attr-dict
-  }];
-  let hasVerifier = 1;
-}
-//===----------------------------------------------------------------------===//
 // LocalOp
 //===----------------------------------------------------------------------===//
 def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
@@ -569,7 +547,7 @@ def CallOp : GCCJIT_Op<"call"> {
     UnitAttr:$tail,
     UnitAttr:$builtin
   );
-  let results = (outs AnyType:$result);
+  let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{
     custom<TailCallAttr>($tail)
     custom<BuiltinCallAttr>($builtin)
@@ -590,7 +568,7 @@ def PtrCallOp : GCCJIT_Op<"ptr_call"> {
     ```
   }];
   let arguments = (ins GCCJIT_PointerType:$callee, Variadic<AnyType>:$args, UnitAttr:$tail);
-  let results = (outs AnyType:$result);
+  let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{
     custom<TailCallAttr>($tail) 
     $callee `(` $args `)` `:` functional-type(operands, results) attr-dict

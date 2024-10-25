@@ -382,14 +382,5 @@ LogicalResult AsRValueOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// EvalOp
-//===----------------------------------------------------------------------===//
-LogicalResult EvalOp::verify() {
-  if (isa<mlir::gccjit::LValueType>(getExpr().getType()))
-    return emitOpError("operand should be an rvalue");
-  return success();
-}
-
-//===----------------------------------------------------------------------===//
 // RValue Expressions
 //===----------------------------------------------------------------------===//

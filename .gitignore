@@ -26,3 +26,5 @@ compile_flags.txt
 
 # CMake user presets
 CMakeUserPresets.json
+
+mlir-gccjit-*
