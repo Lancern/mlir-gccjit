@@ -209,4 +209,42 @@ def GCCJIT_VectorType : GCCJIT_Type<"Vector", "vector"> {
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// Struct and union type
+//===----------------------------------------------------------------------===//
+class GCCJIT_RecordType<string name, string typeMnemonic>
+    : GCCJIT_Type<name, typeMnemonic> {
+  let parameters = (ins "mlir::StringAttr":$name,
+                        "mlir::ArrayAttr":$fields);
+  let assemblyFormat = [{
+    `<` custom<RecordBody>($name, $fields) `>`
+  }];
+
+  let builders = [
+    TypeBuilder<(ins "llvm::StringRef":$name,
+                     "llvm::ArrayRef<mlir::gccjit::FieldAttr>":$fields), [{
+      auto nameAttr = StringAttr::get($_ctxt, name);
+      auto fieldsAttr = ArrayAttr::get(
+          $_ctxt, llvm::SmallVector<Attribute>(fields.begin(), fields.end()));
+      return get($_ctxt, nameAttr, fieldsAttr);
+    }]>
+  ];
+
+  let genVerifyDecl = 1;
+}
+
+def GCCJIT_StructType : GCCJIT_RecordType<"Struct", "struct"> {
+  let summary = "GCCJIT struct type";
+  let description = [{
+    The `!gccjit.struct` type represents a GCCJIT struct type.
+  }];
+}
+
+def GCCJIT_UnionType : GCCJIT_RecordType<"Union", "union"> {
+  let summary = "GCCJIT union type";
+  let description = [{
+    The `!gccjit.union` type represents a GCCJIT union type.
+  }];
+}
+
 #endif // GCCJIT_TYPES

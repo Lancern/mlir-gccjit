@@ -19,22 +19,63 @@
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/DialectImplementation.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/OpImplementation.h"
 #include "mlir/IR/Types.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
 
+#include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 
+using namespace mlir;
 using namespace mlir::gccjit;
 
 //===----------------------------------------------------------------------===//
 // GCCJIT Custom Parser/Printer Signatures
 //===----------------------------------------------------------------------===//
+
+static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
+                                     ArrayAttr &fields) {
+  if (parser.parseAttribute(name))
+    return failure();
+
+  if (parser.parseLBrace())
+    return failure();
+
+  SmallVector<Attribute> fieldAttrs;
+  auto fieldParser = [&] {
+    FieldAttr attr;
+    if (failed(parser.parseAttribute(attr)))
+      return failure();
+    fieldAttrs.push_back(attr);
+    return success();
+  };
+  if (parser.parseCommaSeparatedList(fieldParser))
+    return failure();
+
+  if (parser.parseRBrace())
+    return failure();
+
+  return success();
+}
+
+static void printRecordBody(AsmPrinter &printer, StringAttr name,
+                            ArrayAttr fields) {
+  printer << name << " {";
+  llvm::interleaveComma(fields, printer, [&printer](mlir::Attribute elem) {
+    printer << cast<FieldAttr>(elem);
+  });
+  printer << "}";
+}
 
 #define GET_TYPEDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsTypes.cpp.inc"
@@ -423,4 +464,30 @@ void mlir::gccjit::ComplexType::print(::mlir::AsmPrinter &odsPrinter) const {
     llvm_unreachable("unknown float type");
   }
   odsPrinter << ">";
+}
+
+//===----------------------------------------------------------------------===//
+// Struct and union type definitions
+//===----------------------------------------------------------------------===//
+
+static LogicalResult
+verifyRecordFields(llvm::function_ref<InFlightDiagnostic()> emitError,
+                   ArrayAttr fields) {
+  for (Attribute elem : fields) {
+    if (!isa<FieldAttr>(elem))
+      return emitError() << "fields of a record type must be FieldAttr";
+  }
+  return success();
+}
+
+LogicalResult mlir::gccjit::StructType::verify(
+    llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
+    ArrayAttr fields) {
+  return verifyRecordFields(emitError, fields);
+}
+
+LogicalResult mlir::gccjit::UnionType::verify(
+    llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
+    ArrayAttr fields) {
+  return verifyRecordFields(emitError, fields);
 }

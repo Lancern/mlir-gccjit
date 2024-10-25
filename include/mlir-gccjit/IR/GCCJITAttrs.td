@@ -143,6 +143,28 @@ def NullAttr : GCCJIT_Attr<"Null", "null", [TypedAttrInterface]> {
 }
 
 //===----------------------------------------------------------------------===//
+// Record field attribute
+//===----------------------------------------------------------------------===//
+
+def FieldAttr : GCCJIT_Attr<"Field", "field"> {
+  let summary = "A field within a struct or a union";
+  let description = [{
+    The `#gccjit.field` attribute represents a field within a record (i.e. a
+    record or a union).
+
+    When the `bitWidth` parameter is present, the attribute represents a
+    bitfield. The `bitWidth` parameter gives the width of the bitfield.
+  }];
+
+  let parameters = (ins "mlir::StringAttr":$name, "mlir::Type":$type,
+                        OptionalParameter<"unsigned">:$bitWidth);
+
+  let assemblyFormat = [{
+    `<` $type $name (`:` $bitWidth^)? `>`
+  }];
+}
+
+//===----------------------------------------------------------------------===//
 // OptLevel Attr
 //===----------------------------------------------------------------------===//
 
@@ -195,7 +217,7 @@ def FnAttrEnum : I32EnumAttr<"FnAttrEnum", "Function attribute",
 }
 
 def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
-  let summary = "Function Attribute"; 
+  let summary = "Function Attribute";
   let description = [{
     A `#gccjit.fn_attr` attribute represents a function attribute.
     There three types of function attributes:
@@ -204,7 +226,7 @@ def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
     - integer array attributes: those with an array of integers.
   }];
 
-  let parameters = (ins 
+  let parameters = (ins
     "FnAttrEnumAttr":$attr,
     OptionalParameter<"::mlir::StringAttr">:$strValue,
     OptionalParameter<"::mlir::DenseI32ArrayAttr">:$intArrayValue

@@ -15,8 +15,14 @@
 #ifndef MLIR_GCCJIT_IR_GCCJIT_TYPES_H
 #define MLIR_GCCJIT_IR_GCCJIT_TYPES_H
 
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
+
 #include <libgccjit.h>
+
+namespace mlir::gccjit {
+class FieldAttr;
+} // namespace mlir::gccjit
 
 #define GET_TYPEDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsTypes.h.inc"
@@ -25,9 +31,11 @@
 // GCCJIT Custom Parser/Printer Signatures
 //===----------------------------------------------------------------------===//
 namespace mlir::gccjit {
-mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p, llvm::SmallVector<mlir::Type> &params,
+mlir::ParseResult parseFuncTypeArgs(mlir::AsmParser &p,
+                                    llvm::SmallVector<mlir::Type> &params,
                                     bool &isVarArg);
-void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params, bool isVarArg);
+void printFuncTypeArgs(mlir::AsmPrinter &p, mlir::ArrayRef<mlir::Type> params,
+                       bool isVarArg);
 
 inline bool isIntegral(mlir::Type type) {
   if (auto qualified = dyn_cast<QualifiedType>(type))

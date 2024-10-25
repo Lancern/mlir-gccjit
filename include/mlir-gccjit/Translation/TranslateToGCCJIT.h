@@ -15,6 +15,7 @@
 #ifndef MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 #define MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 
+#include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
@@ -77,8 +78,8 @@ private:
   llvm::DenseMap<SymbolRefAttr, FunctionEntry> functionMap;
   llvm::DenseMap<SymbolRefAttr, gcc_jit_lvalue *> globalMap;
   llvm::DenseMap<Type, gcc_jit_type *> typeMap;
-  llvm::DenseMap<Type, StructEntry> structMap;
-  llvm::DenseMap<Type, UnionEntry> unionMap;
+  llvm::DenseMap<StructType, StructEntry> structMap;
+  llvm::DenseMap<UnionType, UnionEntry> unionMap;
 
   void populateGCCJITModuleOptions();
   void declareAllFunctionAndGlobals();

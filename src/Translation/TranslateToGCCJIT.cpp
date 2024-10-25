@@ -157,6 +157,12 @@ gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
                     auto size = t.getNumUnits();
                     return gcc_jit_type_get_vector(elemType, size);
                   })
+                  .Case([&](gccjit::StructType t) -> gcc_jit_type * {
+                    llvm_unreachable("NYI");
+                  })
+                  .Case([&](gccjit::UnionType t) -> gcc_jit_type * {
+                    llvm_unreachable("NYI");
+                  })
                   .Default([](mlir::Type) { return nullptr; });
   typeMap[type] = res;
   return res;
