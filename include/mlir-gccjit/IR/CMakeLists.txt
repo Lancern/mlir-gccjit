@@ -11,3 +11,5 @@ mlir_tablegen(GCCJITOpsAttributes.h.inc -gen-attrdef-decls)
 mlir_tablegen(GCCJITOpsAttributes.cpp.inc -gen-attrdef-defs)
 add_public_tablegen_target(MLIRGCCJITEnumsGen)
 add_dependencies(mlir-headers MLIRGCCJITEnumsGen)
+
+add_subdirectory(Interfaces)

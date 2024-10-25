@@ -486,8 +486,24 @@ LogicalResult mlir::gccjit::StructType::verify(
   return verifyRecordFields(emitError, fields);
 }
 
+llvm::StringRef mlir::gccjit::StructType::getRecordName() const {
+  return getName().getValue();
+}
+
+mlir::ArrayAttr mlir::gccjit::StructType::getRecordFields() const {
+  return getFields();
+}
+
 LogicalResult mlir::gccjit::UnionType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
     ArrayAttr fields) {
   return verifyRecordFields(emitError, fields);
+}
+
+llvm::StringRef mlir::gccjit::UnionType::getRecordName() const {
+  return getName().getValue();
+}
+
+mlir::ArrayAttr mlir::gccjit::UnionType::getRecordFields() const {
+  return getFields();
 }

@@ -4,6 +4,7 @@
 include "mlir/IR/AttrTypeBase.td"
 
 include "mlir-gccjit/IR/GCCJITDialect.td"
+include "mlir-gccjit/IR/Interfaces/GCCJITRecordTypeInterface.td"
 
 class GCCJIT_Type<string name, string typeMnemonic, list<Trait> traits = []>
     : TypeDef<GCCJIT_Dialect, name, traits> {
@@ -213,7 +214,9 @@ def GCCJIT_VectorType : GCCJIT_Type<"Vector", "vector"> {
 // Struct and union type
 //===----------------------------------------------------------------------===//
 class GCCJIT_RecordType<string name, string typeMnemonic>
-    : GCCJIT_Type<name, typeMnemonic> {
+    : GCCJIT_Type<name, typeMnemonic, [
+        DeclareTypeInterfaceMethods<GCCJITRecordTypeInterface>
+      ]> {
   let parameters = (ins "mlir::StringAttr":$name,
                         "mlir::ArrayAttr":$fields);
   let assemblyFormat = [{
