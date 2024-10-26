@@ -816,4 +816,87 @@ def GetGlobalOp : GCCJIT_Op<"get_global"> {
     $sym `:` type($result) attr-dict
   }];
 }
+
+//===----------------------------------------------------------------------===//
+// AsmOp
+//===----------------------------------------------------------------------===//
+def AsmOp : GCCJIT_Op<"asm", [AttrSizedOperandSegments]> {
+  let summary = "Inline assembly operation";
+  let description = [{
+    The "asm" operation represents an inline assembly operation.
+    ```mlir
+    gccjit.asm inline volatile ("..." 
+      : "=r"(%result) 
+      : "r"(%arg0), "r"(%arg1) 
+      : "memory"
+    )
+    ```
+  }];
+  let arguments = (ins 
+    UnitAttr:$inline_flag,
+    UnitAttr:$volatile_flag,
+    StrAttr:$template_code,
+    ArrayAttr:$outputConstraints,
+    ArrayAttr:$outputSymbols,
+    Variadic<GCCJIT_LValueType>:$outputs,
+    ArrayAttr:$inputConstraints,
+    ArrayAttr:$inputSymbols,
+    Variadic<AnyType>:$inputs,
+    ArrayAttr:$clobbers
+  );
+  let assemblyFormat = [{
+    custom<AsmInlineAttr>($inline_flag)
+    custom<AsmVolatileAttr>($volatile_flag)
+    `(` 
+       $template_code
+      `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs, type($outputs))
+      `:` custom<AsmOperands>($inputConstraints, $inputSymbols, $inputs, type($inputs))
+      `:` custom<ClobberList>($clobbers)
+    `)` attr-dict
+  }];
+}
+
+///===----------------------------------------------------------------------===//
+/// AsmGotoOp
+///===----------------------------------------------------------------------===//
+def AsmGotoOp : GCCJIT_Op<"asm_goto", [Terminator, ParentOneOf<["FuncOp"]>, AttrSizedOperandSegments]> {
+  let summary = "Inline assembly operation";
+  let description = [{
+    The "asm" operation represents an inline assembly operation.
+    ```mlir
+    gccjit.asm_goto inline volatile ("..." 
+      : "=r"(%result) 
+      : "r"(%arg0), "r"(%arg1) 
+      : "memory"
+      : /* goto labels */ label1, label2
+      : /* fallthrough label */ "label3"
+    )
+    ```
+  }];
+  let arguments = (ins 
+    UnitAttr:$inline_flag,
+    UnitAttr:$volatile_flag,
+    StrAttr:$template_code,
+    ArrayAttr:$outputConstraints,
+    ArrayAttr:$outputSymbols,
+    Variadic<GCCJIT_LValueType>:$outputs,
+    ArrayAttr:$inputConstraints,
+    ArrayAttr:$inputSymbols,
+    Variadic<AnyType>:$inputs,
+    ArrayAttr:$clobbers
+  );
+  let successors = (successor AnySuccessor:$fallthrough, VariadicSuccessor<AnySuccessor>:$labels);
+  let assemblyFormat = [{
+    custom<AsmInlineAttr>($inline_flag)
+    custom<AsmVolatileAttr>($volatile_flag)
+    `(` 
+       $template_code
+      `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs, type($outputs))
+      `:` custom<AsmOperands>($inputConstraints, $inputSymbols, $inputs, type($inputs))
+      `:` custom<ClobberList>($clobbers)
+      `:` $labels
+      `:` $fallthrough
+    `)` attr-dict
+  }];
+}
 #endif // GCCJIT_OPS

@@ -23,6 +23,7 @@
 #include "mlir/IR/BlockSupport.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
+#include "mlir/IR/BuiltinTypeInterfaces.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/DialectImplementation.h"
@@ -34,6 +35,7 @@
 #include "mlir/IR/StorageUniquerSupport.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/TypeUtilities.h"
+#include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
@@ -42,6 +44,7 @@
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Support/LogicalResult.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 
@@ -293,6 +296,95 @@ constexpr ParseNamedUnitAttr parseTailCallAttr{"tail"};
 constexpr PrintNamedUnitAttr printTailCallAttr{"tail"};
 constexpr ParseNamedUnitAttr parseBuiltinCallAttr{"builtin"};
 constexpr PrintNamedUnitAttr printBuiltinCallAttr{"builtin"};
+constexpr ParseNamedUnitAttr parseAsmInlineAttr{"inline"};
+constexpr PrintNamedUnitAttr printAsmInlineAttr{"inline"};
+constexpr ParseNamedUnitAttr parseAsmVolatileAttr{"volatile"};
+constexpr PrintNamedUnitAttr printAsmVolatileAttr{"volatile"};
+
+ParseResult
+parseAsmOperands(OpAsmParser &parser, ArrayAttr &constrains, ArrayAttr &symbols,
+                 SmallVectorImpl<OpAsmParser::UnresolvedOperand> &operands,
+                 SmallVectorImpl<Type> &operandTypes) {
+  SmallVector<Attribute> constrainsVec;
+  SmallVector<Attribute> symbolsVec;
+  do {
+    std::string symbol{};
+    StringAttr constraint{};
+    Type operandType{};
+    OpAsmParser::UnresolvedOperand operand;
+    // has symbol?
+    if (parser.parseOptionalLSquare().succeeded()) {
+      if (parser.parseKeywordOrString(&symbol) || symbol.empty())
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected  non-empty constraint string");
+      if (parser.parseRSquare())
+        return {};
+    }
+    // parse constraint
+    if (!parser.parseOptionalAttribute(constraint).has_value()) {
+      if (!symbol.empty())
+        return parser.emitError(parser.getCurrentLocation(),
+                                "expected constraint string after symbol");
+      // otherwise, there is no operands. we need to check this for the first
+      // round parsing before any comma
+      break;
+    }
+
+    // parse ( operand )
+    if (parser.parseLParen())
+      return {};
+    if (parser.parseOperand(operand))
+      return {};
+    if (parser.parseColonType(operandType))
+      return {};
+    if (parser.parseRParen())
+      return {};
+
+    constrainsVec.push_back(constraint);
+    symbolsVec.push_back(StringAttr::get(parser.getContext(), symbol));
+    operands.push_back(operand);
+    operandTypes.push_back(operandType);
+  } while (parser.parseOptionalComma().succeeded());
+
+  constrains = ArrayAttr::get(parser.getContext(), constrainsVec);
+  symbols = ArrayAttr::get(parser.getContext(), symbolsVec);
+  return success();
+}
+void printAsmOperands(OpAsmPrinter &p, Operation *op, ArrayAttr constrains,
+                      ArrayAttr symbols, OperandRange operands,
+                      ValueTypeRange<OperandRange> operandTypes) {
+  llvm::interleaveComma(llvm::zip(constrains, symbols, operands, operandTypes),
+                        p, [&](auto tuple) {
+                          auto [constraint, symbol, operand, operandType] =
+                              tuple;
+                          if (!cast<StringAttr>(symbol).getValue().empty())
+                            p << "[\"" << symbol << "\"] ";
+                          p.printAttribute(constraint);
+                          p << "(";
+                          p.printOperand(operand);
+                          p << " : ";
+                          p.printType(operandType);
+                          p << ")";
+                        });
+}
+
+ParseResult parseClobberList(OpAsmParser &parser, ArrayAttr &clobbers) {
+  llvm::SmallVector<Attribute> clobbersVec;
+  do {
+    StringAttr clobber;
+    if (!parser.parseOptionalAttribute(clobber).has_value())
+      break;
+    clobbersVec.push_back(clobber);
+  } while (parser.parseOptionalComma().succeeded());
+  clobbers = ArrayAttr::get(parser.getContext(), clobbersVec);
+  return success();
+}
+
+void printClobberList(OpAsmPrinter &p, Operation *, ArrayAttr clobbers) {
+  llvm::interleaveComma(clobbers, p,
+                        [&](Attribute clobber) { p.printAttribute(clobber); });
+}
+
 } // namespace
 
 #define GET_OP_CLASSES
