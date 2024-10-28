@@ -6,7 +6,7 @@ MLIR dialect for [`libgccjit`](https://gcc.gnu.org/onlinedocs/jit/).
 
 In general you need the following tools and libraries to build `mlir-gccjit`:
 
-- A working C++ compiler toolchain that supports C++20 standard.
+- A working C++ compiler toolchain that supports C++17 standard.
 - [CMake] with minimum version 3.22.
 - [Ninja] build system (recommended but not mandatory).
 - [LLVM] libraries and development files. For now we have only tested LLVM-18.
@@ -25,6 +25,15 @@ For Ubuntu 24.04 (noble) users:
 ```bash
 apt-get install build-essential cmake ninja-build llvm-18-dev libmlir-18-dev libgccjit-14-dev mlir-18-tools
 ```
+
+Additionally, you need the [`lit` tool] to run tests. You can install the tool
+via `pip`:
+
+```bash
+pip install lit
+```
+
+[`lit` tool]: https://llvm.org/docs/CommandGuide/lit.html
 
 ## Build
 
