@@ -26,38 +26,38 @@
 
 namespace mlir::gccjit {
 class GCCJITTypeConverter : public TypeConverter {
-  llvm::DenseMap<mlir::Type, gccjit::StructType> packedTypes;
 
 public:
   GCCJITTypeConverter();
   ~GCCJITTypeConverter();
   // integral types
-  gccjit::IntType convertIndexType(mlir::IndexType type);
-  gccjit::IntType convertIntegerType(mlir::IntegerType type);
-  gccjit::IntAttr convertIntegerAttr(mlir::IntegerAttr attr);
+  gccjit::IntType convertIndexType(mlir::IndexType type) const;
+  gccjit::IntType convertIntegerType(mlir::IntegerType type) const;
+  gccjit::IntAttr convertIntegerAttr(mlir::IntegerAttr attr) const;
 
   // floating point types
-  gccjit::FloatType convertFloatType(mlir::FloatType type);
-  gccjit::FloatAttr convertFloatAttr(mlir::FloatAttr attr);
+  gccjit::FloatType convertFloatType(mlir::FloatType type) const;
+  gccjit::FloatAttr convertFloatAttr(mlir::FloatAttr attr) const;
 
   // special composite types
-  gccjit::ComplexType convertComplexType(mlir::ComplexType type);
-  gccjit::VectorType convertVectorType(mlir::VectorType type);
+  gccjit::ComplexType convertComplexType(mlir::ComplexType type) const;
+  gccjit::VectorType convertVectorType(mlir::VectorType type) const;
 
   // function prototype
-  gccjit::FuncType convertFunctionType(mlir::FunctionType type, bool isVarArg);
+  gccjit::FuncType convertFunctionType(mlir::FunctionType type,
+                                       bool isVarArg) const;
 
   // function type to function pointer
   gccjit::PointerType convertFunctionTypeAsPtr(mlir::FunctionType type,
-                                               bool isVarArg);
+                                               bool isVarArg) const;
 
   // memref type
-  gccjit::StructType getMemrefDescriptorType(mlir::MemRefType type);
+  gccjit::StructType getMemrefDescriptorType(mlir::MemRefType type) const;
   gccjit::StructType
-  getUnrankedMemrefDescriptorType(mlir::UnrankedMemRefType type);
+  getUnrankedMemrefDescriptorType(mlir::UnrankedMemRefType type) const;
 
-private:
-  Type convertAndPackTypesIfNonSingleton(TypeRange types, FunctionType name);
+  Type convertAndPackTypesIfNonSingleton(TypeRange types,
+                                         FunctionType name) const;
 };
 } // namespace mlir::gccjit
 #endif // MLIR_GCCJIT_CONVERSION_TYPECONVERTER_H

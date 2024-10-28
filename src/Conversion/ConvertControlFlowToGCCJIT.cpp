@@ -12,28 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MLIR_GCCJIT_PASSES_H
-#define MLIR_GCCJIT_PASSES_H
+#include "mlir-gccjit/Passes.h"
 
-#include <mlir/IR/BuiltinOps.h>
-#include <mlir/Pass/Pass.h>
+using namespace mlir;
+using namespace mlir::gccjit;
 
-#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinDialect.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/Pass/Pass.h"
+namespace {
 
-namespace mlir::gccjit {
+struct ConvertControlFlowToGCCJITPass
+    : public ConvertCFToGCCJITBase<ConvertControlFlowToGCCJITPass> {
+  using ConvertCFToGCCJITBase::ConvertCFToGCCJITBase;
+  void runOnOperation() override final;
+};
 
-std::unique_ptr<Pass> createConvertCFToGCCJITPass();
-std::unique_ptr<Pass> createConvertFuncToGCCJITPass();
+void ConvertControlFlowToGCCJITPass::runOnOperation() {
+  llvm_unreachable("Not implemented");
+}
 
-#define GEN_PASS_CLASSES
-#define GEN_PASS_REGISTRATION
-#define GEN_PASS_DECL
-#include "mlir-gccjit/Passes.h.inc"
+}; // namespace
 
-} // namespace mlir::gccjit
-
-#endif // MLIR_GCCJIT_PASSES_H
+std::unique_ptr<Pass> mlir::gccjit::createConvertCFToGCCJITPass() {
+  return std::make_unique<ConvertControlFlowToGCCJITPass>();
+}

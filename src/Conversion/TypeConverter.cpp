@@ -24,7 +24,7 @@
 using namespace mlir;
 using namespace mlir::gccjit;
 
-GCCJITTypeConverter::GCCJITTypeConverter() : TypeConverter(), packedTypes() {
+GCCJITTypeConverter::GCCJITTypeConverter() : TypeConverter() {
   addConversion([&](mlir::IndexType type) { return convertIndexType(type); });
   addConversion(
       [&](mlir::IntegerType type) { return convertIntegerType(type); });
@@ -33,7 +33,7 @@ GCCJITTypeConverter::GCCJITTypeConverter() : TypeConverter(), packedTypes() {
       [&](mlir::ComplexType type) { return convertComplexType(type); });
   addConversion([&](mlir::VectorType type) { return convertVectorType(type); });
   addConversion([&](mlir::FunctionType type) {
-    return convertFunctionType(type, false);
+    return convertFunctionTypeAsPtr(type, false);
   });
   addConversion(
       [&](mlir::MemRefType type) { return getMemrefDescriptorType(type); });
@@ -42,12 +42,13 @@ GCCJITTypeConverter::GCCJITTypeConverter() : TypeConverter(), packedTypes() {
 // Nothing to do for now
 GCCJITTypeConverter::~GCCJITTypeConverter() {}
 
-gccjit::IntType GCCJITTypeConverter::convertIndexType(mlir::IndexType type) {
+gccjit::IntType
+GCCJITTypeConverter::convertIndexType(mlir::IndexType type) const {
   return IntType::get(type.getContext(), GCC_JIT_TYPE_SIZE_T);
 }
 
 gccjit::IntType
-GCCJITTypeConverter::convertIntegerType(mlir::IntegerType type) {
+GCCJITTypeConverter::convertIntegerType(mlir::IntegerType type) const {
   // gccjit always translates bitwidth to specific types
   // https://github.com/gcc-mirror/gcc/blob/ae0dbea896b77686fcd1c890e5b7c5fed6197767/gcc/jit/jit-recording.cc#L796
   switch (type.getWidth()) {
@@ -79,13 +80,14 @@ GCCJITTypeConverter::convertIntegerType(mlir::IntegerType type) {
 }
 
 gccjit::IntAttr
-GCCJITTypeConverter::convertIntegerAttr(mlir::IntegerAttr attr) {
+GCCJITTypeConverter::convertIntegerAttr(mlir::IntegerAttr attr) const {
   auto value = attr.getValue();
   auto type = convertIntegerType(cast<IntegerType>(attr.getType()));
   return IntAttr::get(attr.getContext(), type, value);
 }
 
-gccjit::FloatType GCCJITTypeConverter::convertFloatType(mlir::FloatType type) {
+gccjit::FloatType
+GCCJITTypeConverter::convertFloatType(mlir::FloatType type) const {
   if (type.isF32())
     return FloatType::get(type.getContext(), GCC_JIT_TYPE_FLOAT);
   if (type.isF64())
@@ -99,14 +101,15 @@ gccjit::FloatType GCCJITTypeConverter::convertFloatType(mlir::FloatType type) {
   return {};
 }
 
-gccjit::FloatAttr GCCJITTypeConverter::convertFloatAttr(mlir::FloatAttr attr) {
+gccjit::FloatAttr
+GCCJITTypeConverter::convertFloatAttr(mlir::FloatAttr attr) const {
   auto value = attr.getValue();
   auto type = convertFloatType(cast<mlir::FloatType>(attr.getType()));
   return FloatAttr::get(attr.getContext(), type, value);
 }
 
 gccjit::ComplexType
-GCCJITTypeConverter::convertComplexType(mlir::ComplexType type) {
+GCCJITTypeConverter::convertComplexType(mlir::ComplexType type) const {
   auto elementType = type.getElementType();
   if (elementType.isF32())
     return ComplexType::get(type.getContext(), GCC_JIT_TYPE_COMPLEX_FLOAT);
@@ -119,7 +122,7 @@ GCCJITTypeConverter::convertComplexType(mlir::ComplexType type) {
 }
 
 gccjit::VectorType
-GCCJITTypeConverter::convertVectorType(mlir::VectorType type) {
+GCCJITTypeConverter::convertVectorType(mlir::VectorType type) const {
   auto elementType = convertType(type.getElementType());
   auto size = type.getNumElements();
   return VectorType::get(type.getContext(), elementType, size);
@@ -127,7 +130,7 @@ GCCJITTypeConverter::convertVectorType(mlir::VectorType type) {
 
 gccjit::FuncType
 GCCJITTypeConverter::convertFunctionType(mlir::FunctionType type,
-                                         bool isVarArg) {
+                                         bool isVarArg) const {
   llvm::SmallVector<Type> argTypes;
   argTypes.reserve(type.getNumInputs());
   if (convertTypes(type.getInputs(), argTypes).failed())
@@ -138,87 +141,76 @@ GCCJITTypeConverter::convertFunctionType(mlir::FunctionType type,
 
 gccjit::PointerType
 GCCJITTypeConverter::convertFunctionTypeAsPtr(mlir::FunctionType type,
-                                              bool isVarArg) {
+                                              bool isVarArg) const {
   auto funcType = convertFunctionType(type, isVarArg);
   return PointerType::get(type.getContext(), funcType);
 }
 
 gccjit::StructType
-GCCJITTypeConverter::getMemrefDescriptorType(mlir::MemRefType type) {
-  auto &cached = packedTypes[type];
-  if (!cached) {
-    auto name = Twine("__memref_")
-                    .concat(Twine(
-                        reinterpret_cast<uintptr_t>(type.getAsOpaquePointer())))
-                    .str();
+GCCJITTypeConverter::getMemrefDescriptorType(mlir::MemRefType type) const {
+  auto name =
+      Twine("__memref_")
+          .concat(Twine(reinterpret_cast<uintptr_t>(type.getAsOpaquePointer())))
+          .str();
+  auto nameAttr = StringAttr::get(type.getContext(), name);
+  auto elementType = convertType(type.getElementType());
+  auto elementPtrType = PointerType::get(type.getContext(), elementType);
+  auto indexType = IntType::get(type.getContext(), GCC_JIT_TYPE_SIZE_T);
+  auto rank = type.getRank();
+  auto dimOrStrideType =
+      gccjit::ArrayType::get(type.getContext(), indexType, rank);
+  SmallVector<Attribute> fields;
+  for (auto [idx, field] :
+       llvm::enumerate(ArrayRef<Type>{elementPtrType, elementPtrType, indexType,
+                                      dimOrStrideType, dimOrStrideType})) {
+    auto name = Twine("__field_").concat(Twine(idx)).str();
     auto nameAttr = StringAttr::get(type.getContext(), name);
-    auto elementType = convertType(type.getElementType());
-    auto elementPtrType = PointerType::get(type.getContext(), elementType);
-    auto indexType = IntType::get(type.getContext(), GCC_JIT_TYPE_SIZE_T);
-    auto rank = type.getRank();
-    auto dimOrStrideType =
-        gccjit::ArrayType::get(type.getContext(), indexType, rank);
-    SmallVector<Attribute> fields;
-    for (auto [idx, field] : llvm::enumerate(
-             ArrayRef<Type>{elementPtrType, elementPtrType, indexType,
-                            dimOrStrideType, dimOrStrideType})) {
-      auto name = Twine("__field_").concat(Twine(idx)).str();
-      auto nameAttr = StringAttr::get(type.getContext(), name);
-      fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
-    }
-    auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);
-    cached = StructType::get(type.getContext(), nameAttr, fieldsAttr);
+    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
   }
-  return cached;
+  auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);
+  return StructType::get(type.getContext(), nameAttr, fieldsAttr);
 }
 
 gccjit::StructType GCCJITTypeConverter::getUnrankedMemrefDescriptorType(
-    mlir::UnrankedMemRefType type) {
-  auto &cached = packedTypes[type];
-  if (!cached) {
-    auto name = Twine("__unranked_memref_")
-                    .concat(Twine(
-                        reinterpret_cast<uintptr_t>(type.getAsOpaquePointer())))
-                    .str();
+    mlir::UnrankedMemRefType type) const {
+
+  auto name =
+      Twine("__unranked_memref_")
+          .concat(Twine(reinterpret_cast<uintptr_t>(type.getAsOpaquePointer())))
+          .str();
+  auto nameAttr = StringAttr::get(type.getContext(), name);
+  auto indexType = IntType::get(type.getContext(), GCC_JIT_TYPE_SIZE_T);
+  auto opaquePtrType = PointerType::get(
+      type.getContext(), IntType::get(type.getContext(), GCC_JIT_TYPE_VOID));
+  SmallVector<Attribute> fields;
+  for (auto [idx, field] :
+       llvm::enumerate(ArrayRef<Type>{indexType, opaquePtrType})) {
+    auto name = Twine("__field_").concat(Twine(idx)).str();
     auto nameAttr = StringAttr::get(type.getContext(), name);
-    auto indexType = IntType::get(type.getContext(), GCC_JIT_TYPE_SIZE_T);
-    auto opaquePtrType = PointerType::get(
-        type.getContext(), IntType::get(type.getContext(), GCC_JIT_TYPE_VOID));
-    SmallVector<Attribute> fields;
-    for (auto [idx, field] :
-         llvm::enumerate(ArrayRef<Type>{indexType, opaquePtrType})) {
-      auto name = Twine("__field_").concat(Twine(idx)).str();
-      auto nameAttr = StringAttr::get(type.getContext(), name);
-      fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
-    }
-    auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);
-    cached = StructType::get(type.getContext(), nameAttr, fieldsAttr);
+    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
   }
-  return cached;
+  auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);
+  return StructType::get(type.getContext(), nameAttr, fieldsAttr);
 }
 
-Type GCCJITTypeConverter::convertAndPackTypesIfNonSingleton(TypeRange types,
-                                                            FunctionType func) {
+Type GCCJITTypeConverter::convertAndPackTypesIfNonSingleton(
+    TypeRange types, FunctionType func) const {
   if (types.size() == 0)
     return VoidType::get(func.getContext());
   if (types.size() == 1)
     return types.front();
-  gccjit::StructType &cached = packedTypes[func];
-  if (!cached) {
-    auto name = Twine("__retpack_")
-                    .concat(Twine(
-                        reinterpret_cast<uintptr_t>(func.getAsOpaquePointer())))
-                    .str();
-    SmallVector<Attribute> fields;
-    for (auto [idx, type] : llvm::enumerate(types)) {
-      auto name = Twine("__field_").concat(Twine(idx)).str();
-      auto nameAttr = StringAttr::get(func.getContext(), name);
-      fields.push_back(FieldAttr::get(type.getContext(), nameAttr, type, 0));
-    }
+
+  auto name =
+      Twine("__retpack_")
+          .concat(Twine(reinterpret_cast<uintptr_t>(func.getAsOpaquePointer())))
+          .str();
+  SmallVector<Attribute> fields;
+  for (auto [idx, type] : llvm::enumerate(types)) {
+    auto name = Twine("__field_").concat(Twine(idx)).str();
     auto nameAttr = StringAttr::get(func.getContext(), name);
-    auto fieldsAttr = ArrayAttr::get(func.getContext(), fields);
-    auto structType = StructType::get(func.getContext(), nameAttr, fieldsAttr);
-    cached = structType;
+    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, type, 0));
   }
-  return cached;
+  auto nameAttr = StringAttr::get(func.getContext(), name);
+  auto fieldsAttr = ArrayAttr::get(func.getContext(), fields);
+  return StructType::get(func.getContext(), nameAttr, fieldsAttr);
 }
