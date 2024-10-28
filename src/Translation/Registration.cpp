@@ -22,6 +22,7 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace mlir::gccjit {
 namespace {
@@ -34,43 +35,65 @@ enum class OutputType {
   Dylib
 };
 
-llvm::Expected<llvm::sys::fs::TempFile>
+std::optional<llvm::SmallString<128>>
 dumpContextToTempfile(gcc_jit_context *ctxt, OutputType type) {
-  auto file = llvm::sys::fs::TempFile::create("mlir-gccjit-%%%%%%%");
-  if (!file)
-    return file.takeError();
+  StringRef suffix;
+  llvm::SmallString<128> path;
   switch (type) {
   case OutputType::Gimple:
-    gcc_jit_context_dump_to_file(ctxt, file->TmpName.c_str(), false);
+    suffix = ".gimple";
     break;
   case OutputType::Reproducer:
-    gcc_jit_context_dump_reproducer_to_file(ctxt, file->TmpName.c_str());
+    suffix = ".c";
+    break;
+  case OutputType::Assembly:
+    suffix = ".s";
+    break;
+  case OutputType::Object:
+    suffix = ".o";
+    break;
+  case OutputType::Executable:
+    suffix = ".exe";
+    break;
+  case OutputType::Dylib:
+    suffix = ".so";
+    break;
+  }
+  auto err = llvm::sys::fs::createTemporaryFile("mlir-gccjit", suffix, path);
+  if (err)
+    return std::nullopt;
+  switch (type) {
+  case OutputType::Gimple:
+    gcc_jit_context_dump_to_file(ctxt, path.c_str(), false);
+    break;
+  case OutputType::Reproducer:
+    gcc_jit_context_dump_reproducer_to_file(ctxt, path.c_str());
     break;
   case OutputType::Assembly:
     gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_ASSEMBLER,
-                                    file->TmpName.c_str());
+                                    path.c_str());
     break;
   case OutputType::Object:
     gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_OBJECT_FILE,
-                                    file->TmpName.c_str());
+                                    path.c_str());
     break;
   case OutputType::Executable:
     gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_EXECUTABLE,
-                                    file->TmpName.c_str());
+                                    path.c_str());
     break;
   case OutputType::Dylib:
     gcc_jit_context_compile_to_file(ctxt, GCC_JIT_OUTPUT_KIND_DYNAMIC_LIBRARY,
-                                    file->TmpName.c_str());
+                                    path.c_str());
     break;
   }
-  return file;
+  return path;
 }
 
-LogicalResult copyFileToStream(llvm::sys::fs::TempFile file,
+LogicalResult copyFileToStream(const llvm::SmallString<128> &path,
                                llvm::raw_ostream &os) {
   os.flush();
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> buffer =
-      llvm::MemoryBuffer::getFile(file.TmpName);
+      llvm::MemoryBuffer::getFile(path);
   if (!buffer)
     return failure();
   os << buffer.get()->getBuffer();
