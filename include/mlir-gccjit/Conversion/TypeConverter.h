@@ -18,13 +18,14 @@
 #include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/Transforms/DialectConversion.h"
 
 namespace mlir::gccjit {
 class GCCJITTypeConverter : public TypeConverter {
-  gcc_jit_context *tmpContext;
+  llvm::DenseMap<mlir::Type, gccjit::StructType> packedTypes;
 
 public:
   GCCJITTypeConverter();
@@ -55,7 +56,7 @@ public:
   getUnrankedMemrefDescriptorType(mlir::UnrankedMemRefType type);
 
 private:
-  Type convertAndPackTypesIfNonSingleton(TypeRange types);
+  Type convertAndPackTypesIfNonSingleton(TypeRange types, FunctionType name);
 };
 } // namespace mlir::gccjit
 #endif // MLIR_GCCJIT_CONVERSION_TYPECONVERTER_H
