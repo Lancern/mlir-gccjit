@@ -2,6 +2,7 @@ import os
 
 config.mlir_gccjit_src_root = r'@PROJECT_SOURCE_DIR@'
 config.mlir_gccjit_build_root = r'@PROJECT_BINARY_DIR@'
+config.file_check_exe = r'@LLVM_FILE_CHECK_EXE@'
 
 lit_cfg_file = os.path.join(
     config.mlir_gccjit_src_root, "test/lit.cfg.py")

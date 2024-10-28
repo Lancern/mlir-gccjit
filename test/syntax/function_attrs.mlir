@@ -1,4 +1,5 @@
-// RUN: %gccjit-opt %s
+// RUN: %gccjit-opt -o %t.mlir %s
+// RUN: %filecheck --input-file=%t.mlir %s
 
 !i32 = !gccjit.int<int32_t>
 !ptr_i32 = !gccjit.ptr<!i32>
@@ -16,5 +17,9 @@ module @test attributes {
             %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!ptr_i32> to !ptr_i32
             gccjit.return %0 : !ptr_i32
     }
-
+    // CHECK-LABEL: @foo
+    // CHECK-NEXT:     ^{{.+}}(%[[ARG0:.+]]: !gccjit.lvalue<!gccjit.ptr<!gccjit.int<int32_t>>>):
+    // CHECK-NEXT:     %[[#V0:]] = gccjit.as_rvalue %[[ARG0]] : <!gccjit.ptr<!gccjit.int<int32_t>>> to !gccjit.ptr<!gccjit.int<int32_t>>
+    // CHECK-NEXT:     gccjit.return %[[#V0]] : !gccjit.ptr<!gccjit.int<int32_t>>
+    // CHECK-NEXT: }
 }
