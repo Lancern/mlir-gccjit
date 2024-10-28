@@ -377,7 +377,7 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
         paramTypes.size(), params.data(), type.isVarArg());
     processFunctionAttrs(func, funcHandle);
     SymbolRefAttr symRef = SymbolRefAttr::get(getMLIRContext(), name);
-    functionMap[symRef] = funcHandle;
+    functionMap.try_emplace(symRef, funcHandle);
   }
   for (auto global : moduleOp.getOps<gccjit::GlobalOp>()) {
     auto type = global.getType();

@@ -66,12 +66,15 @@ private:
     gcc_jit_function *fnHandle;
 
   public:
+    FunctionEntry() : fnHandle(nullptr) {}
     FunctionEntry(gcc_jit_function *fnHandle) : fnHandle(fnHandle) {}
     operator gcc_jit_function *() const { return fnHandle; }
     size_t getParamCount() const {
+      assert(fnHandle);
       return gcc_jit_function_get_param_count(fnHandle);
     }
     gcc_jit_param *operator[](size_t index) const {
+      assert(fnHandle);
       return gcc_jit_function_get_param(fnHandle, index);
     }
   };
