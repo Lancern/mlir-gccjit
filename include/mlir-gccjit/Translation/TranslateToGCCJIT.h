@@ -38,6 +38,10 @@ struct GCCJITContextDeleter {
 using GCCJITContext = std::unique_ptr<gcc_jit_context, GCCJITContextDeleter>;
 
 class GCCJITTranslation {
+  class FunctionEntry;
+  class StructEntry;
+  class UnionEntry;
+
 public:
   GCCJITTranslation();
   ~GCCJITTranslation();
@@ -55,22 +59,47 @@ public:
   gcc_jit_location *getLocation(LocationAttr loc);
 
   gcc_jit_lvalue *getGlobalLValue(SymbolRefAttr symbol);
-  gcc_jit_function *getFunction(SymbolRefAttr symbol);
+  FunctionEntry getFunction(SymbolRefAttr symbol);
 
 private:
-  struct FunctionEntry {
+  class FunctionEntry {
     gcc_jit_function *fnHandle;
-    llvm::SmallVector<gcc_jit_param *> params;
+
+  public:
+    FunctionEntry(gcc_jit_function *fnHandle) : fnHandle(fnHandle) {}
+    operator gcc_jit_function *() const { return fnHandle; }
+    size_t getParamCount() const {
+      return gcc_jit_function_get_param_count(fnHandle);
+    }
+    gcc_jit_param *operator[](size_t index) const {
+      return gcc_jit_function_get_param(fnHandle, index);
+    }
   };
 
-  struct StructEntry {
+  class StructEntry {
     gcc_jit_struct *structHandle;
-    llvm::SmallVector<gcc_jit_field *> fields;
+
+  public:
+    StructEntry(gcc_jit_struct *structHandle) : structHandle(structHandle) {}
+    operator gcc_jit_struct *() const { return structHandle; }
+    size_t getFieldCount() const {
+      return gcc_jit_struct_get_field_count(structHandle);
+    }
+    gcc_jit_field *operator[](size_t index) const {
+      return gcc_jit_struct_get_field(structHandle, index);
+    }
   };
 
-  struct UnionEntry {
+  class UnionEntry {
     gcc_jit_type *unionHandle;
     llvm::SmallVector<gcc_jit_field *> fields;
+
+  public:
+    UnionEntry(gcc_jit_type *unionHandle, ArrayRef<gcc_jit_field *> fields)
+        : unionHandle(unionHandle), fields(fields) {}
+    operator gcc_jit_type *() const { return unionHandle; }
+    size_t getFieldCount() const { return fields.size(); }
+    gcc_jit_field *operator[](size_t index) const { return fields[index]; }
   };
 
   gcc_jit_context *ctxt;

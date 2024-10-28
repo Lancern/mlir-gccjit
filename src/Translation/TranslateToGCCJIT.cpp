@@ -224,8 +224,9 @@ gcc_jit_lvalue *GCCJITTranslation::getGlobalLValue(SymbolRefAttr symbol) {
   return globalMap.lookup(symbol);
 }
 
-gcc_jit_function *GCCJITTranslation::getFunction(SymbolRefAttr symbol) {
-  return functionMap.lookup(symbol).fnHandle;
+GCCJITTranslation::FunctionEntry
+GCCJITTranslation::getFunction(SymbolRefAttr symbol) {
+  return functionMap.lookup(symbol);
 }
 
 void GCCJITTranslation::populateGCCJITModuleOptions() {
@@ -376,7 +377,7 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
         paramTypes.size(), params.data(), type.isVarArg());
     processFunctionAttrs(func, funcHandle);
     SymbolRefAttr symRef = SymbolRefAttr::get(getMLIRContext(), name);
-    functionMap[symRef] = {funcHandle, std::move(params)};
+    functionMap[symRef] = funcHandle;
   }
   for (auto global : moduleOp.getOps<gccjit::GlobalOp>()) {
     auto type = global.getType();
@@ -439,7 +440,7 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
   if (auto funcOp = dyn_cast<gccjit::FuncOp>(region.getParentOp())) {
     auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
                                       funcOp.getSymName());
-    auto *function = translator.getFunction(symName);
+    auto function = translator.getFunction(symName);
     for (auto arg : region.getArguments()) {
       auto *lvalue = gcc_jit_function_get_param(function, arg.getArgNumber());
       exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
@@ -780,7 +781,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AddrOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(FnAddrOp op) {
-  auto *fn = getTranslator().getFunction(op.getCallee());
+  auto fn = getTranslator().getFunction(op.getCallee());
   assert(fn && "function not found");
   auto *loc = getTranslator().getLocation(op.getLoc());
   return gcc_jit_function_get_address(fn, loc);
