@@ -44,7 +44,9 @@ using namespace mlir::gccjit;
 //===----------------------------------------------------------------------===//
 
 static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
-                                     ArrayAttr &fields) {
+                                     ArrayAttr &fields, LocationAttr &loc) {
+  SMLoc startLoc = parser.getCurrentLocation();
+
   if (parser.parseAttribute(name))
     return failure();
 
@@ -65,16 +67,22 @@ static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
   if (parser.parseRBrace())
     return failure();
 
+  OptionalParseResult parseLocResult = parser.parseOptionalAttribute(loc);
+  if (!parseLocResult.has_value())
+    loc = parser.getEncodedSourceLoc(startLoc);
+  else if (parseLocResult.value())
+    return failure();
+
   return success();
 }
 
 static void printRecordBody(AsmPrinter &printer, StringAttr name,
-                            ArrayAttr fields) {
+                            ArrayAttr fields, LocationAttr loc) {
   printer << name << " {";
   llvm::interleaveComma(fields, printer, [&printer](mlir::Attribute elem) {
     printer << cast<FieldAttr>(elem);
   });
-  printer << "}";
+  printer << "} " << loc;
 }
 
 #define GET_TYPEDEF_CLASSES
@@ -482,7 +490,7 @@ verifyRecordFields(llvm::function_ref<InFlightDiagnostic()> emitError,
 
 LogicalResult mlir::gccjit::StructType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
-    ArrayAttr fields) {
+    ArrayAttr fields, LocationAttr loc) {
   return verifyRecordFields(emitError, fields);
 }
 
@@ -494,9 +502,13 @@ mlir::ArrayAttr mlir::gccjit::StructType::getRecordFields() const {
   return getFields();
 }
 
+mlir::LocationAttr mlir::gccjit::StructType::getRecordLoc() const {
+  return getLoc();
+}
+
 LogicalResult mlir::gccjit::UnionType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
-    ArrayAttr fields) {
+    ArrayAttr fields, LocationAttr loc) {
   return verifyRecordFields(emitError, fields);
 }
 
@@ -506,6 +518,10 @@ llvm::StringRef mlir::gccjit::UnionType::getRecordName() const {
 
 mlir::ArrayAttr mlir::gccjit::UnionType::getRecordFields() const {
   return getFields();
+}
+
+mlir::LocationAttr mlir::gccjit::UnionType::getRecordLoc() const {
+  return getLoc();
 }
 
 bool mlir::gccjit::UnionType::isUnion() const { return true; }

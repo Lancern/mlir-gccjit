@@ -916,7 +916,7 @@ convertRecordType(GCCJITTranslation &translation,
                           const char *, int, gcc_jit_field **>);
 
   // TODO: handle opaque struct type.
-  // TODO: encode location information in the record type and in the fields.
+  // TODO: encode location information in the record fields.
 
   convertedFields.clear();
   convertedFields.reserve(type.getRecordFields().size());
@@ -939,10 +939,14 @@ convertRecordType(GCCJITTranslation &translation,
   }
 
   std::string recordName = type.getRecordName().str();
+
+  gcc_jit_location *recordLoc = nullptr;
+  if (type.getRecordLoc())
+    recordLoc = translation.getLocation(type.getRecordLoc());
+
   return std::invoke(std::forward<RawCreator>(rawHandleCreator),
-                     translation.getContext(), /*loc=*/nullptr,
-                     recordName.c_str(), convertedFields.size(),
-                     convertedFields.data());
+                     translation.getContext(), recordLoc, recordName.c_str(),
+                     convertedFields.size(), convertedFields.data());
 }
 
 GCCJITTranslation::StructEntry &

@@ -29,6 +29,13 @@ def GCCJITRecordTypeInterface : TypeInterface<"GCCJITRecordTypeInterface"> {
       }],
       /*retTy=*/"ArrayAttr",
       /*methodName=*/"getRecordFields"
+    >,
+    InterfaceMethod<
+      [{
+        Get the source location of this record.
+      }],
+      /*retTy=*/"LocationAttr",
+      /*methodName=*/"getRecordLoc"
     >
   ];
 }

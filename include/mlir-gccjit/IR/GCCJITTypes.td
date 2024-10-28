@@ -218,18 +218,31 @@ class GCCJIT_RecordType<string name, string typeMnemonic>
         DeclareTypeInterfaceMethods<GCCJITRecordTypeInterface>
       ]> {
   let parameters = (ins "mlir::StringAttr":$name,
-                        "mlir::ArrayAttr":$fields);
+                        "mlir::ArrayAttr":$fields,
+                        OptionalParameter<"mlir::LocationAttr">:$loc);
   let assemblyFormat = [{
-    `<` custom<RecordBody>($name, $fields) `>`
+    `<` custom<RecordBody>($name, $fields, $loc) `>`
   }];
 
   let builders = [
+    TypeBuilder<(ins "mlir::StringAttr":$name,
+                     "mlir::ArrayAttr":$fields), [{
+      return get($_ctxt, name, fields, mlir::LocationAttr{});
+    }]>,
     TypeBuilder<(ins "llvm::StringRef":$name,
                      "llvm::ArrayRef<mlir::gccjit::FieldAttr>":$fields), [{
       auto nameAttr = StringAttr::get($_ctxt, name);
       auto fieldsAttr = ArrayAttr::get(
           $_ctxt, llvm::SmallVector<Attribute>(fields.begin(), fields.end()));
       return get($_ctxt, nameAttr, fieldsAttr);
+    }]>,
+    TypeBuilder<(ins "llvm::StringRef":$name,
+                     "llvm::ArrayRef<mlir::gccjit::FieldAttr>":$fields,
+                     "mlir::LocationAttr":$loc), [{
+      auto nameAttr = StringAttr::get($_ctxt, name);
+      auto fieldsAttr = ArrayAttr::get(
+          $_ctxt, llvm::SmallVector<Attribute>(fields.begin(), fields.end()));
+      return get($_ctxt, nameAttr, fieldsAttr, loc);
     }]>
   ];
 
