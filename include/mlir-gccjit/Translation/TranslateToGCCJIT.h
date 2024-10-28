@@ -84,7 +84,7 @@ private:
 
   public:
     StructEntry(gcc_jit_struct *structHandle) : structHandle(structHandle) {}
-    operator gcc_jit_struct *() const { return structHandle; }
+    gcc_jit_struct *getRawHandle() const { return structHandle; }
     size_t getFieldCount() const {
       return gcc_jit_struct_get_field_count(structHandle);
     }
@@ -100,7 +100,7 @@ private:
   public:
     UnionEntry(gcc_jit_type *unionHandle, ArrayRef<gcc_jit_field *> fields)
         : unionHandle(unionHandle), fields(fields) {}
-    operator gcc_jit_type *() const { return unionHandle; }
+    gcc_jit_type *getRawHandle() const { return unionHandle; }
     size_t getFieldCount() const { return fields.size(); }
     gcc_jit_field *operator[](size_t index) const { return fields[index]; }
   };
@@ -117,6 +117,9 @@ private:
   void declareAllFunctionAndGlobals();
   void translateGlobalInitializers();
   void translateFunctions();
+
+  StructEntry &getOrCreateStructEntry(StructType type);
+  UnionEntry &getOrCreateUnionEntry(UnionType type);
 };
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op);
