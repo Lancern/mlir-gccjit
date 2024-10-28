@@ -19,7 +19,7 @@ target_link_libraries(gccjit-translate
   MLIRSPIRVDialect
   MLIRTranslateLib
   MLIRSupport
-  MLIRGTranslateToGCCJIT
+  MLIRTranslateToGCCJIT
   MLIRGCCJIT
   )
 

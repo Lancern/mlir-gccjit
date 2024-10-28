@@ -22,3 +22,4 @@ add_mlir_dialect_library(MLIRGCCJIT
 add_subdirectory(Interfaces)
 add_subdirectory(Translation)
 add_subdirectory(Passes)
+add_subdirectory(Conversion)

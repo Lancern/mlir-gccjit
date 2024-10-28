@@ -1,4 +1,4 @@
-add_mlir_dialect_library(MLIRGTranslateToGCCJIT
+add_mlir_dialect_library(MLIRTranslateToGCCJIT
     TranslateToGCCJIT.cpp
     Registration.cpp
 
