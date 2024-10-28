@@ -23,7 +23,7 @@ In general you need the following tools and libraries to build `mlir-gccjit`:
 For Ubuntu 24.04 (noble) users:
 
 ```bash
-apt-get install build-essential cmake ninja-build llvm-18-dev libmlir-18-dev libgccjit-14-dev mlir-18-tools
+apt-get install build-essential cmake ninja-build llvm-18-dev llvm-18-tools libmlir-18-dev libgccjit-14-dev mlir-18-tools
 ```
 
 Additionally, you need the [`lit` tool] to run tests. You can install the tool
