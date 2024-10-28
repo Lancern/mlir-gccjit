@@ -1,3 +1,5 @@
+// RUN: %gccjit-opt %s
+
 !u64 = !gccjit.int<uint64_t>
 module @test {
     gccjit.func exported @foo() -> !u64 {
@@ -5,7 +7,7 @@ module @test {
         gccjit.asm volatile (
             "rdtsc\n\tshl $32, %%rdx\n\tor %%rdx, %0\n\t"
             : "=a" (%msr : !gccjit.lvalue<!u64>)
-            : 
+            :
             : "rdx"
         )
         %val = gccjit.as_rvalue %msr : !gccjit.lvalue<!u64> to !u64

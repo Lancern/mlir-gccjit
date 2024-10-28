@@ -40,6 +40,7 @@ if (GCCJIT_LIB_DIRS OR GCCJIT_LIBRARY)
     )
 else ()
     add_library(libgccjit INTERFACE)
+    target_link_libraries(libgccjit INTERFACE gccjit)
 endif ()
 
 if (GCCJIT_INCLUDE_DIR)

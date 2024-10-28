@@ -27,4 +27,7 @@ compile_flags.txt
 # CMake user presets
 CMakeUserPresets.json
 
+# Python virtual environments.
+/venv*
+
 mlir-gccjit-*

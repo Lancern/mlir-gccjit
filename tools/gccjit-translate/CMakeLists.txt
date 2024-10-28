@@ -24,3 +24,5 @@ target_link_libraries(gccjit-translate
   )
 
 mlir_check_link_libraries(gccjit-translate)
+
+add_dependencies(gccjit-tools gccjit-translate)

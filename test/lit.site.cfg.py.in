@@ -1,0 +1,8 @@
+import os
+
+config.mlir_gccjit_src_root = r'@PROJECT_SOURCE_DIR@'
+config.mlir_gccjit_build_root = r'@PROJECT_BINARY_DIR@'
+
+lit_cfg_file = os.path.join(
+    config.mlir_gccjit_src_root, "test/lit.cfg.py")
+lit_config.load_config(config, lit_cfg_file)

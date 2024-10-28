@@ -1,3 +1,5 @@
+// RUN: %gccjit-opt %s
+
 !float = !gccjit.fp<float>
 !ldb = !gccjit.fp<long double>
 module @test {

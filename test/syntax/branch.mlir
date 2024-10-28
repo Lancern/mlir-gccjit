@@ -1,3 +1,5 @@
+// RUN: %gccjit-opt %s
+
 !bool = !gccjit.int<bool>
 !long = !gccjit.int<long>
 module @test {

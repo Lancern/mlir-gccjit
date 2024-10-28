@@ -5,6 +5,8 @@ if (NOT PROJECT_IS_TOP_LEVEL)
     message(FATAL_ERROR "For now mlir-gccjit must be the root project during build")
 endif ()
 
+option(MLIR_GCCJIT_ENABLE_TEST "Enable test targets in build" ON)
+
 include(cmake/FindLLVM.cmake)
 include(cmake/FindMLIR.cmake)
 include(cmake/FindGCCJIT.cmake)
@@ -27,3 +29,7 @@ add_subdirectory(include)
 add_subdirectory(src)
 
 add_subdirectory(tools)
+
+if (MLIR_GCCJIT_ENABLE_TEST)
+    add_subdirectory(test)
+endif ()

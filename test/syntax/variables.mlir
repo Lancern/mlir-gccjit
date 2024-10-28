@@ -1,10 +1,12 @@
+// RUN: %gccjit-opt %s
+
 !i32 = !gccjit.int<int32_t>
 !ptr_i32 = !gccjit.ptr<!i32>
-module @test attributes { 
+module @test attributes {
     gccjit.debug_info = true
 } {
     gccjit.func exported @foo(!i32) -> !i32 attrs([
-        #gccjit.fn_attr<noinline> 
+        #gccjit.fn_attr<noinline>
     ]) {
         ^entry(%arg0: !gccjit.lvalue<!i32>):
             %0 = gccjit.local align(16) : <!i32>

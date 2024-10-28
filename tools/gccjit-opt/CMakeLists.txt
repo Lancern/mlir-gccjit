@@ -17,7 +17,9 @@ target_link_libraries(gccjit-opt
     MLIROptLib
     MLIRGCCJIT
     MLIRGCCJITPasses
-    ${dialect_libs} 
-    ${conversion_libs} 
-    ${extension_libs} 
+    ${dialect_libs}
+    ${conversion_libs}
+    ${extension_libs}
 )
+
+add_dependencies(gccjit-tools gccjit-opt)
