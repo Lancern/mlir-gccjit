@@ -7,7 +7,6 @@ add_mlir_tool(gccjit-opt
   DEPENDS
     MLIROptLib
     MLIRGCCJIT
-    MLIRGCCJITPasses
     ${dialect_libs}
     ${conversion_libs}
     ${extension_libs}
@@ -16,7 +15,6 @@ target_link_libraries(gccjit-opt
   PRIVATE
     MLIROptLib
     MLIRGCCJIT
-    MLIRGCCJITPasses
     ${dialect_libs}
     ${conversion_libs}
     ${extension_libs}

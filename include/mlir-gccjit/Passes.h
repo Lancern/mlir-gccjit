@@ -22,12 +22,11 @@
 
 namespace mlir::gccjit {
 
-std::unique_ptr<Pass> createGCCJITMaterializeRValuePass();
-
-#define GEN_PASS_CLASSES
-#define GEN_PASS_REGISTRATION
-#define GEN_PASS_DECL
-#include "mlir-gccjit/Passes.h.inc"
+// TODO: Add pass declarations here.
+// #define GEN_PASS_CLASSES
+// #define GEN_PASS_REGISTRATION
+// #define GEN_PASS_DECL
+// #include "mlir-gccjit/Passes.h.inc"
 
 } // namespace mlir::gccjit
 

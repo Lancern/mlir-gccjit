@@ -17,45 +17,6 @@
 
 include "mlir/Pass/PassBase.td"
 
-def GCCJITMaterializeRValue : Pass<"gccjit-materialize-rvalue", "::mlir::gccjit::FuncOp"> {
-  let summary = "Automatically materialize rvalue expressions in GCCJIT dialect";
-  let description = [{
-    RValue expressions are lazy in GCCJIT. If not associated with a local variable, 
-    they will never be emitted inplace. Using a nonmaterialized rvalue expression twice will
-    result in two separate computations. Using a stateful rvalue across an effectful operation
-    may result in different results. GCCJIT dialect mimic the low-level behavior of GCCJIT on default,
-    translating rvalue/lvalue expression plainly. However, if one wants to use this dialect similar to
-    the traditional SSA semantics, this pass will insert nessary materialization for rvalue expressions.
-
-    Definition (Constant RValue): An RValue expression is constant if and only if it is created by
-    a constant operation.
-
-    The automatic materialization criteria are as follows:
-    - If the RValue expression is a mere constant, then it will not be materialized.
-    - Otherwise:
-        - if the RValue has a user that is not local to the block, then the expression is materialized.
-        - Otherwise, inside a block:
-          - If the RValue has multiple uses, it shall be materialized.
-          - If the RValue expression is immediately consumed by terminators, then there is no need to materialize.
-          - Otherwise:
-            - If the RValue expression is a call to non-pure/const annotated function, then the expression is immediately 
-                materialized.
-            - If the RValue expression is a load/dereferece from a volatile lvalue or a dereference of a volatile pointer, then the expression
-                is immediately materialized.
-            - If the RValue expression's def-use chain overlap with any other effectful operation such as function call, asm block, or assignment 
-                to variable that is not created by the materialization process, then the expression is materialized.
-
-    By materialization, we mean that a local variable will be created and singly assigned by the RValue expression. All
-    future uses of the RValue expression will be replaced by the local variable.
-
-    To obtain a one-to-one mapping between SSA variable and GCCJIT variable, use this pass with option `full=true`. When such option is enabled,
-    each instruction with result is materialized and each instruction without result is evaluated step-by-step.
-  }];
-  let constructor = "::mlir::gccjit::createGCCJITMaterializeRValuePass()";
-  let dependentDialects = ["::mlir::gccjit::GCCJITDialect"];
-  let options = [
-    Option<"full", "full", "bool", /*default=*/"false", "Full Materialization">
-  ];
-}
+// TODO: Add passes here.
 
 #endif // MLIR_GCCJIT_PASSES
