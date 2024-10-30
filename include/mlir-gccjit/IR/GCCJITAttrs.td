@@ -237,34 +237,6 @@ def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
 }
 
 //===----------------------------------------------------------------------===//
-// RegName Attr
-//===----------------------------------------------------------------------===//
-def RegNameAttr : GCCJIT_Attr<"RegName", "reg_name"> {
-  let summary = "Register name";
-  let parameters = (ins "StringAttr":$name);
-  let description = [{
-    Represents the register name.
-  }];
-  let assemblyFormat = [{
-    `<` $name `>`
-  }];
-}
-
-//===----------------------------------------------------------------------===//
-// Visibility Attr
-//===----------------------------------------------------------------------===//
-def VisibilityAttr : GCCJIT_Attr<"Visibility", "visibility"> {
-  let summary = "Visibility";
-  let parameters = (ins "StringAttr":$visibility);
-  let description = [{
-    Represents the visibility.
-  }];
-  let assemblyFormat = [{
-    `<` $visibility `>`
-  }];
-}
-
-//===----------------------------------------------------------------------===//
 // ByteArrayInitializer Attr
 //===----------------------------------------------------------------------===//
 def ByteArrayInitializerAttr : GCCJIT_Attr<"ByteArrayInitializer", "byte_array"> {
