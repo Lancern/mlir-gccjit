@@ -72,9 +72,9 @@ void GCCJITMaterializeRValue::materializeOp(IRRewriter &rewriter,
     for (auto &c : buffer)
       if (isalnum(c))
         name.push_back(c);
-    auto var = rewriter.create<LocalOp>(
-        op->getLoc(), lvalueTy, nullptr, nullptr, nullptr,
-        StringLiteralAttr::get(op->getContext(), rewriter.getStringAttr(name)));
+    auto var =
+        rewriter.create<LocalOp>(op->getLoc(), lvalueTy, nullptr, nullptr,
+                                 nullptr, rewriter.getStringAttr(name));
     auto assign = rewriter.create<AssignOp>(op->getLoc(), value, var);
     auto loaded =
         rewriter.create<AsRValueOp>(op->getLoc(), value.getType(), var);

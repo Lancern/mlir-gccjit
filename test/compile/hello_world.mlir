@@ -16,7 +16,7 @@ module @test attributes {
     gccjit.func imported @puts(!str) -> !i32
 
     gccjit.func exported @main() -> !i32 {
-        %0 = gccjit.literal <"hello, world!\n"> : !str
+        %0 = gccjit.literal "hello, world!\n" : !str
         // CHECK-GIMPLE: (void)puts ("hello, world!\n");
         // CHECK-OUTPUT: hello, world!
         %1 = gccjit.call @puts(%0) : (!str) -> !i32 {gccjit.eval}
