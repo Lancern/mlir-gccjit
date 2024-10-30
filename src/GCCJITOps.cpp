@@ -194,7 +194,7 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
       if (parser.parseLParen())
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected '(' after 'literal'");
-      StringLiteralAttr stringLiteral;
+      StringAttr stringLiteral;
       if (parser.parseCustomAttributeWithFallback(stringLiteral))
         return parser.emitError(parser.getCurrentLocation(),
                                 "expected string initializer");
@@ -237,8 +237,7 @@ ParseResult parseGlobalInitializer(OpAsmParser &parser, Attribute &initializer,
 
 void printGlobalInitializer(OpAsmPrinter &p, Operation *op,
                             Attribute initializer, Region &body) {
-  if (auto stringLiteral =
-          dyn_cast_if_present<StringLiteralAttr>(initializer)) {
+  if (auto stringLiteral = dyn_cast_if_present<StringAttr>(initializer)) {
     p << "literal(";
     p.printStrippedAttrOrType(stringLiteral);
     p << ")";

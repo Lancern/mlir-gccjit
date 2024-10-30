@@ -263,10 +263,10 @@ def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
     The "local_var" operation declares a local variable.
   }];
   let arguments = (ins 
-    OptionalAttr<RegNameAttr>:$reg_name,
+    OptionalAttr<StrAttr>:$reg_name,
     OptionalAttr<IndexAttr>:$alignment,
     OptionalAttr<TLSModelAttr>:$tls_model,
-    OptionalAttr<StringLiteralAttr>:$var_name
+    OptionalAttr<StrAttr>:$var_name
   );
   let results = (outs GCCJIT_LValueType:$var);
   let assemblyFormat = [{
@@ -302,12 +302,12 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
     GlbKind:$glb_kind,
     SymbolNameAttr:$sym_name,
     TypeAttrOf<GCCJIT_LValueType>:$type,
-    OptionalAttr<RegNameAttr>:$reg_name,
+    OptionalAttr<StrAttr>:$reg_name,
     OptionalAttr<IndexAttr>:$alignment,
     OptionalAttr<TLSModelAttr>:$tls_model,
-    OptionalAttr<LinkSectionAttr>:$link_section,
-    OptionalAttr<VisibilityAttr>:$visibility,
-    OptionalAttr<AnyAttrOf<[StringLiteralAttr, ByteArrayInitializerAttr]>>:$initializer
+    OptionalAttr<StrAttr>:$link_section,
+    OptionalAttr<StrAttr>:$visibility,
+    OptionalAttr<AnyAttrOf<[StrAttr, ByteArrayInitializerAttr]>>:$initializer
   );
   let regions = (region AnyRegion:$body);
   let assemblyFormat = [{
@@ -630,7 +630,7 @@ def LiteralOp : GCCJIT_Op<"literal"> {
     %res = gccjit.literal #gccjit.str<"Hello, World!"> : !str
     ```
   }];
-  let arguments = (ins StringLiteralAttr:$value);
+  let arguments = (ins StrAttr:$value);
   let results = (outs GCCJIT_PointerType:$result);
   let assemblyFormat = [{
     $value `:` type($result) attr-dict
@@ -754,7 +754,7 @@ def CommentOp : GCCJIT_Op<"comment", [Pure]> {
     gccjit.comment #gccjit.str<"This is a comment">
     ```
   }];
-  let arguments = (ins StringLiteralAttr:$comment);
+  let arguments = (ins StrAttr:$comment);
   let assemblyFormat = [{
     $comment attr-dict
   }];

@@ -44,11 +44,11 @@ module @test attributes {
         // CHECK-NEXT: gccjit.return %[[#V0]] : !gccjit.int<int32_t>
     } : !gccjit.lvalue<!i32>
 
-    gccjit.global exported @test4 literal (#gccjit.str<"hello, world!">) : !gccjit.lvalue<!gccjit.array<!gccjit.int<char>, 14>>
-    // CHECK-LABEL: gccjit.global exported @test4 literal(<"hello, world!">) : !gccjit.lvalue<!gccjit.array<!gccjit.int<char>, 14>>
+    gccjit.global exported @test4 literal ("hello, world!") : !gccjit.lvalue<!gccjit.array<!gccjit.int<char>, 14>>
+    // CHECK-LABEL: gccjit.global exported @test4 literal("hello, world!") : !gccjit.lvalue<!gccjit.array<!gccjit.int<char>, 14>>
 
     // CHECK-LABEL: @test5
-    gccjit.global exported @test5 link_section(#gccjit.link_section<".rodata">) init {
+    gccjit.global exported @test5 link_section(".rodata") init {
         %0 = gccjit.get_global @test3 : !gccjit.lvalue<!i32>
         %addr = gccjit.addr (%0 : !gccjit.lvalue<!i32>) : !gccjit.ptr<!i32>
         gccjit.return %addr : !gccjit.ptr<!i32>

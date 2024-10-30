@@ -392,25 +392,22 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
         ctxt, getLocation(global.getLoc()), kind, typeHandle, name.c_str());
     globalMap[nameAttr] = globalHandle;
     if (auto regName = global.getRegName())
-      gcc_jit_lvalue_set_register_name(globalHandle,
-                                       regName->getName().str().c_str());
+      gcc_jit_lvalue_set_register_name(globalHandle, regName->str().c_str());
     if (auto alignment = global.getAlignment())
       gcc_jit_lvalue_set_alignment(globalHandle, alignment->getZExtValue());
     if (auto tlsModel = global.getTlsModel())
       gcc_jit_lvalue_set_tls_model(
           globalHandle, convertTLSModel(tlsModel->getModel().getValue()));
     if (auto linkSection = global.getLinkSection())
-      gcc_jit_lvalue_set_link_section(globalHandle,
-                                      linkSection->getSection().str().c_str());
+      gcc_jit_lvalue_set_link_section(globalHandle, linkSection->str().c_str());
     if (auto visibility = global.getVisibility())
-      gcc_jit_lvalue_add_string_attribute(
-          globalHandle, GCC_JIT_VARIABLE_ATTRIBUTE_VISIBILITY,
-          visibility->getVisibility().str().c_str());
+      gcc_jit_lvalue_add_string_attribute(globalHandle,
+                                          GCC_JIT_VARIABLE_ATTRIBUTE_VISIBILITY,
+                                          visibility->str().c_str());
     if (auto initializer = global.getInitializer()) {
       llvm::TypeSwitch<Attribute>(*initializer)
-          .Case([&](StringLiteralAttr attr) {
-            auto str = attr.getInitializer();
-            auto blob = str.str();
+          .Case([&](StringAttr attr) {
+            auto blob = attr.str();
             gcc_jit_global_set_initializer(globalHandle, blob.c_str(),
                                            blob.size() + 1);
           })
@@ -463,7 +460,7 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
           if (isalnum(c))
             name.push_back(c);
       } else {
-        name = local.getVarName()->getInitializer().str();
+        name = local.getVarName()->str();
       }
       auto *lvalue =
           gcc_jit_function_new_local(function, loc, type, name.c_str());
@@ -618,7 +615,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(ConstantOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(LiteralOp op) {
-  auto string = op.getValue().getInitializer().str();
+  auto string = op.getValue().str();
   return gcc_jit_context_new_string_literal(getContext(), string.c_str());
 }
 

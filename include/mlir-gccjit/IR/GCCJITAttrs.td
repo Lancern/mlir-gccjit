@@ -251,20 +251,6 @@ def RegNameAttr : GCCJIT_Attr<"RegName", "reg_name"> {
 }
 
 //===----------------------------------------------------------------------===//
-// LinkSection Attr
-//===----------------------------------------------------------------------===//
-def LinkSectionAttr : GCCJIT_Attr<"LinkSection", "link_section"> {
-  let summary = "Link section";
-  let parameters = (ins "StringAttr":$section);
-  let description = [{
-    Represents the link section.
-  }];
-  let assemblyFormat = [{
-    `<` $section `>`
-  }];
-}
-
-//===----------------------------------------------------------------------===//
 // Visibility Attr
 //===----------------------------------------------------------------------===//
 def VisibilityAttr : GCCJIT_Attr<"Visibility", "visibility"> {
@@ -275,20 +261,6 @@ def VisibilityAttr : GCCJIT_Attr<"Visibility", "visibility"> {
   }];
   let assemblyFormat = [{
     `<` $visibility `>`
-  }];
-}
-
-//===----------------------------------------------------------------------===//
-// StringLiteral Attr
-//===----------------------------------------------------------------------===//
-def StringLiteralAttr : GCCJIT_Attr<"StringLiteral", "str"> {
-  let summary = "String initializer";
-  let parameters = (ins "StringAttr":$initializer);
-  let description = [{
-    Represents the string initializer.
-  }];
-  let assemblyFormat = [{
-    `<` $initializer `>`
   }];
 }
 
