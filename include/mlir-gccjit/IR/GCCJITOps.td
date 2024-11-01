@@ -96,7 +96,7 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
 //===----------------------------------------------------------------------===//
 // ReturnOp
 //===----------------------------------------------------------------------===//
-def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp", "GlobalOp"]>]> {
+def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp", "GlobalOp", "ExprOp"]>]> {
   let summary = "Return from function";
   let description = [{
     The "return" operation represents a return operation within a function.
@@ -326,7 +326,7 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
 // RValue Expressions
 //===----------------------------------------------------------------------===//
 
-def ExprOp : GCCJIT_Op<"expr", [IsolatedFromAbove]> {
+def ExprOp : GCCJIT_Op<"expr"> {
   let summary = "Expression";
   let description = [{
     The "expr" operation represents an expression.

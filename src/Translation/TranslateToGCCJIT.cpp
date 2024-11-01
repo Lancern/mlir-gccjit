@@ -73,15 +73,15 @@ class RegionVisitor {
   llvm::DenseMap<Value, Expr> exprCache;
   llvm::DenseMap<Block *, gcc_jit_block *> blocks;
   bool valueMaterialization;
-  gcc_jit_block *insertionPoint;
+  RegionVisitor *parent;
 
 public:
   RegionVisitor(GCCJITTranslation &translator, Region &region,
-                gcc_jit_block *blk = nullptr);
+                RegionVisitor *parent = nullptr);
   GCCJITTranslation &getTranslator() const;
   gcc_jit_context *getContext() const;
   MLIRContext *getMLIRContext() const;
-  void translateIntoContext();
+  Expr translateIntoContext();
 
 private:
   Expr visitExpr(Value value, bool toplevel = false);
@@ -103,6 +103,7 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(AddrOp op);
   gcc_jit_rvalue *visitExprWithoutCache(FnAddrOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(ExprOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -112,7 +113,10 @@ private:
   void visitJumpOp(gcc_jit_block *blk, JumpOp op);
   void visitAsmOp(gcc_jit_block *blk, AsmOp op);
   void visitAsmGotoOp(gcc_jit_block *blk, AsmGotoOp op);
-  void visitExprOp(gcc_jit_block *blk, ExprOp op);
+
+  gcc_jit_block *lookupBlock(Block *block);
+  Expr &lookupExpr(Value value);
+  Expr *lookupExprImpl(Value value);
 
   template <typename OpTy>
   void populateExtendedAsm(gcc_jit_extended_asm *extAsm, OpTy op);
@@ -374,8 +378,8 @@ void GCCJITTranslation::translateGlobalInitializers() {
 ///===----------------------------------------------------------------------===///
 
 RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
-                             gcc_jit_block *blk)
-    : translator(translator), region(region), insertionPoint(blk) {
+                             RegionVisitor *parent)
+    : translator(translator), region(region), parent(parent) {
   if (auto funcOp = dyn_cast<gccjit::FuncOp>(region.getParentOp())) {
     auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
                                       funcOp.getSymName());
@@ -385,7 +389,7 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
       exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
     }
     AsmState asmState(funcOp);
-    region.walk([&](Operation *op) {
+    region.walk<WalkOrder::PreOrder>([&](Operation *op) {
       if (op->getNumResults() != 1)
         return WalkResult::skip();
 
@@ -416,9 +420,7 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
       auto *lvalue =
           gcc_jit_function_new_local(function, loc, type, name.c_str());
       exprCache[res] = lvalue;
-      return op->hasTrait<OpTrait::IsIsolatedFromAbove>()
-                 ? WalkResult::skip()
-                 : WalkResult::advance();
+      return isa<ExprOp>(op) ? WalkResult::skip() : WalkResult::advance();
     });
     for (auto &block : region) {
       std::string buffer;
@@ -448,13 +450,13 @@ MLIRContext *RegionVisitor::getMLIRContext() const {
   return translator.getMLIRContext();
 }
 
-void RegionVisitor::translateIntoContext() {
+Expr RegionVisitor::translateIntoContext() {
   auto *parent = region.getParentOp();
   if (auto funcOp = dyn_cast<gccjit::FuncOp>(parent)) {
     for (auto [mlirBlk, gccBlk] : blocks) {
       auto *blk = gccBlk;
-      mlirBlk->walk([&](Operation *op) {
-        llvm::TypeSwitch<Operation *>(op)
+      for (auto &op : *mlirBlk) {
+        llvm::TypeSwitch<Operation *>(&op)
             .Case([&](AssignOp op) { visitAssignOp(blk, op); })
             .Case([&](UpdateOp op) { visitUpdateOp(blk, op); })
             .Case([&](ReturnOp op) { visitReturnOp(blk, op); })
@@ -462,7 +464,6 @@ void RegionVisitor::translateIntoContext() {
             .Case([&](JumpOp op) { visitJumpOp(blk, op); })
             .Case([&](AsmOp op) { visitAsmOp(blk, op); })
             .Case([&](AsmGotoOp op) { visitAsmGotoOp(blk, op); })
-            .Case([&](ExprOp op) { visitExprOp(blk, op); })
             // skip variable declaration
             .Case<GetGlobalOp, LocalOp>([&](auto) { return; })
             .Default([&](Operation *op) {
@@ -471,7 +472,7 @@ void RegionVisitor::translateIntoContext() {
                 if (op->getNumResults() == 1) {
                   auto result = op->getResult(0);
                   auto rvalue = visitExpr(result, true);
-                  auto lvalue = exprCache[result];
+                  auto lvalue = lookupExpr(result);
                   gcc_jit_block_add_assignment(blk, loc, lvalue, rvalue);
                 } else if (auto callOp = dyn_cast<CallOp>(op)) {
                   auto *funcCall = visitExprWithoutCache(callOp);
@@ -482,9 +483,9 @@ void RegionVisitor::translateIntoContext() {
                 }
               }
             });
-      });
+      }
     }
-    return;
+    return {};
   }
 
   assert(mlir::isa<ExprOp>(parent) || mlir::isa<GlobalOp>(parent));
@@ -492,28 +493,24 @@ void RegionVisitor::translateIntoContext() {
   Block &block = region.getBlocks().front();
   auto terminator = cast<gccjit::ReturnOp>(block.getTerminator());
   auto value = terminator->getOperand(0);
-  auto rvalue = visitExpr(value);
+  auto rvalue = visitExpr(value, true);
 
   if (auto globalOp = dyn_cast<gccjit::GlobalOp>(parent)) {
     auto symName = SymbolRefAttr::get(getMLIRContext(), globalOp.getSymName());
     auto *lvalue = getTranslator().getGlobalLValue(symName);
     gcc_jit_global_set_initializer_rvalue(lvalue, rvalue);
-    return;
+    return {};
   }
 
   if (auto exprOp = dyn_cast<ExprOp>(parent)) {
-    assert(insertionPoint != nullptr);
-    auto lvalue = exprCache[exprOp.getResult()];
-    auto *loc = translator.getLocation(exprOp.getLoc());
-    gcc_jit_block_add_assignment(insertionPoint, loc, lvalue, rvalue);
-    return;
+    return rvalue;
   }
 
   llvm_unreachable("unknown region parent");
 }
 
 Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
-  auto *cached = toplevel ? nullptr : &exprCache[value];
+  auto *cached = toplevel ? nullptr : &lookupExpr(value);
 
   if (toplevel || !*cached) {
     auto *op = value.getDefiningOp();
@@ -537,6 +534,7 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](AddrOp op) { return visitExprWithoutCache(op); })
             .Case([&](FnAddrOp op) { return visitExprWithoutCache(op); })
             .Case([&](GetGlobalOp op) { return visitExprWithoutCache(op); })
+            .Case([&](ExprOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *) -> Expr {
               llvm_unreachable("unknown expression type");
             });
@@ -548,9 +546,9 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
   return *cached;
 }
 
-void RegionVisitor::visitExprOp(gcc_jit_block *blk, ExprOp op) {
-  RegionVisitor visitor(getTranslator(), op.getRegion(), blk);
-  visitor.translateIntoContext();
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(ExprOp op) {
+  RegionVisitor visitor(getTranslator(), op.getRegion(), this);
+  return visitor.translateIntoContext();
 }
 
 void RegionVisitor::visitExprs(ValueRange values,
@@ -797,6 +795,31 @@ void RegionVisitor::visitReturnOp(gcc_jit_block *blk, ReturnOp op) {
         blk, getTranslator().getLocation(op.getLoc()));
 }
 
+gcc_jit_block *RegionVisitor::lookupBlock(Block *block) {
+  auto it = blocks.find(block);
+  if (it == blocks.end() && parent)
+    return parent->lookupBlock(block);
+  return it->second;
+}
+
+Expr *RegionVisitor::lookupExprImpl(Value value) {
+  if (parent) {
+    auto *expr = parent->lookupExprImpl(value);
+    if (expr)
+      return expr;
+  }
+  auto it = exprCache.find(value);
+  if (it != exprCache.end())
+    return &it->second;
+  return nullptr;
+}
+
+Expr &RegionVisitor::lookupExpr(Value value) {
+  if (auto *expr = lookupExprImpl(value))
+    return *expr;
+  return exprCache[value];
+}
+
 void RegionVisitor::visitSwitchOp(gcc_jit_block *blk, SwitchOp op) {
   auto value = visitExpr(op.getValue());
   auto *loc = getTranslator().getLocation(op.getLoc());
@@ -807,13 +830,15 @@ void RegionVisitor::visitSwitchOp(gcc_jit_block *blk, SwitchOp op) {
     // TODO: handle signedness
     // TODO: generalize switch statement to support rvalue expressions
     // (constant)
-    auto intLb = cast<IntAttr>(lb).getValue().getZExtValue();
-    auto intUb = cast<IntAttr>(ub).getValue().getZExtValue();
+    auto lbAttr = cast<IntAttr>(lb);
+    auto ubAttr = cast<IntAttr>(ub);
+    auto intLb = lbAttr.getValue().getZExtValue();
+    auto intUb = ubAttr.getValue().getZExtValue();
     auto *dstBlk = blocks[dst];
-    auto *lbv =
-        gcc_jit_context_new_rvalue_from_long(getContext(), nullptr, intLb);
-    auto *ubv =
-        gcc_jit_context_new_rvalue_from_long(getContext(), nullptr, intUb);
+    auto *lbv = gcc_jit_context_new_rvalue_from_long(
+        getContext(), getTranslator().convertType(lbAttr.getType()), intLb);
+    auto *ubv = gcc_jit_context_new_rvalue_from_long(
+        getContext(), getTranslator().convertType(ubAttr.getType()), intUb);
     cases.push_back(gcc_jit_context_new_case(getContext(), lbv, ubv, dstBlk));
   }
   auto *defaultBlk = blocks[op.getDefaultDestination()];
