@@ -17,6 +17,7 @@
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
+#include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir/IR/AsmState.h"
 #include "mlir/IR/Block.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"
@@ -104,6 +105,8 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(FnAddrOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
   gcc_jit_rvalue *visitExprWithoutCache(ExprOp op);
+  gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
+  gcc_jit_lvalue *visitExprWithoutCache(ArrayAccessOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -113,6 +116,7 @@ private:
   void visitJumpOp(gcc_jit_block *blk, JumpOp op);
   void visitAsmOp(gcc_jit_block *blk, AsmOp op);
   void visitAsmGotoOp(gcc_jit_block *blk, AsmGotoOp op);
+  void visitConditionalOp(gcc_jit_block *blk, ConditionalOp op);
 
   gcc_jit_block *lookupBlock(Block *block);
   Expr &lookupExpr(Value value);
@@ -401,6 +405,10 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
         return WalkResult::skip();
       }
 
+      // lvalue expressions are never materialized
+      if (isa<LValueType>(op->getResult(0).getType()) && !isa<LocalOp>(op))
+        return WalkResult::skip();
+
       auto *type = translator.convertType(res.getType());
       auto *loc = translator.getLocation(res.getLoc());
       std::string name;
@@ -459,12 +467,12 @@ Expr RegionVisitor::translateIntoContext() {
             .Case([&](JumpOp op) { visitJumpOp(blk, op); })
             .Case([&](AsmOp op) { visitAsmOp(blk, op); })
             .Case([&](AsmGotoOp op) { visitAsmGotoOp(blk, op); })
-            // skip variable declaration
-            .Case<GetGlobalOp, LocalOp>([&](auto) { return; })
+            .Case([&](ConditionalOp op) { visitConditionalOp(blk, op); })
             .Default([&](Operation *op) {
               if (valueMaterialization) {
                 auto *loc = translator.getLocation(op->getLoc());
-                if (op->getNumResults() == 1) {
+                if (op->getNumResults() == 1 &&
+                    !isa<LValueType>(op->getResult(0).getType())) {
                   auto result = op->getResult(0);
                   auto rvalue = visitExpr(result, true);
                   auto lvalue = lookupExpr(result);
@@ -530,8 +538,11 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](FnAddrOp op) { return visitExprWithoutCache(op); })
             .Case([&](GetGlobalOp op) { return visitExprWithoutCache(op); })
             .Case([&](ExprOp op) { return visitExprWithoutCache(op); })
-            .Default([](Operation *) -> Expr {
-              llvm_unreachable("unknown expression type");
+            .Case([&](DerefOp op) { return visitExprWithoutCache(op); })
+            .Case([&](ArrayAccessOp op) { return visitExprWithoutCache(op); })
+            .Default([](Operation *op) -> Expr {
+              op->dump();
+              llvm::report_fatal_error("unknown expression type");
             });
 
     if (!toplevel)
@@ -541,9 +552,31 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
   return *cached;
 }
 
+gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(DerefOp op) {
+  auto operand = visitExpr(op.getOperand());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  return gcc_jit_rvalue_dereference(operand, loc);
+}
+
+gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(ArrayAccessOp op) {
+  auto base = visitExpr(op.getArray());
+  auto index = visitExpr(op.getIdx());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  return gcc_jit_context_new_array_access(getContext(), loc, base, index);
+}
+
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(ExprOp op) {
   RegionVisitor visitor(getTranslator(), op.getRegion(), this);
   return visitor.translateIntoContext();
+}
+
+void RegionVisitor::visitConditionalOp(gcc_jit_block *blk, ConditionalOp op) {
+  auto condition = visitExpr(op.getCondition());
+  auto *trueBlock = lookupBlock(op.getOnTrue());
+  auto *falseBlock = lookupBlock(op.getOnFalse());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  gcc_jit_block_end_with_conditional(blk, loc, condition, trueBlock,
+                                     falseBlock);
 }
 
 void RegionVisitor::visitExprs(ValueRange values,
