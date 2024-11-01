@@ -327,6 +327,29 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
 //===----------------------------------------------------------------------===//
 // RValue Expressions
 //===----------------------------------------------------------------------===//
+
+def ExprOp : GCCJIT_Op<"expr", [IsolatedFromAbove]> {
+  let summary = "Expression";
+  let description = [{
+    The "expr" operation represents an expression.
+    ```mlir
+    %res = gccjit.expr {
+      %0 = gccjit.const #gccjit.int<32> : !gccjit.int<32>
+      %1 = gccjit.const #gccjit.int<32> : !gccjit.int<32>
+      %2 = gccjit.binary plus %0, %1 : !gccjit.int<32>, !gccjit.int<32>
+      gccjit.return %2 : !gccjit.int<32>
+    } : !gccjit.int<32>
+    ```
+  }];
+  let results = (outs AnyType:$result);
+  let regions = (region AnyRegion:$body);
+  let assemblyFormat = [{
+    $body `:` type($result) attr-dict
+  }];
+}
+
+
+//===----------------------------------------------------------------------===//
 // Value construction operations.
 //===----------------------------------------------------------------------===//
 
