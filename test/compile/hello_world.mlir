@@ -16,14 +16,14 @@ module @test attributes {
     gccjit.func imported @puts(!str) -> !i32
 
     gccjit.func exported @main() -> !i32 {
-        // CHECK-GIMPLE: __var0 = "hello, world!\n";
+        // CHECK-GIMPLE: %0 = "hello, world!\n";
         %0 = gccjit.literal "hello, world!\n" : !str
-        // CHECK-GIMPLE: puts (__var0);
+        // CHECK-GIMPLE: puts (%0);
         // CHECK-OUTPUT: hello, world!
-        %1 = gccjit.call @puts(%0) : (!str) -> !i32 {gccjit.eval}
-        // CHECK-GIMPLE: __var2 = (__int32_t)0;
+        %1 = gccjit.call @puts(%0) : (!str) -> !i32
+        // CHECK-GIMPLE: %2 = (__int32_t)0;
         %2 = gccjit.const #gccjit.zero : !i32
-        // CHECK-GIMPLE: return __var2;
+        // CHECK-GIMPLE: return %2;
         gccjit.return %2 : !i32
     }
 }

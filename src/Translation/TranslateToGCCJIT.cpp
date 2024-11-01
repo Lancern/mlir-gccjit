@@ -406,14 +406,9 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
       std::string name;
       auto varName = op->getAttrOfType<StringAttr>("gccjit.var_name");
       if (!varName) {
-        std::string buffer;
-        llvm::raw_string_ostream bufferStream(buffer);
+        llvm::raw_string_ostream bufferStream(name);
         res.printAsOperand(bufferStream, asmState);
         bufferStream.flush();
-        name = "__var";
-        for (auto &c : buffer)
-          if (isalnum(c))
-            name.push_back(c);
       } else {
         name = varName.getValue().str();
       }
