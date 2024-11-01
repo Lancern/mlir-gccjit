@@ -23,6 +23,7 @@
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Location.h"
+#include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/TypeRange.h"
 #include "mlir/IR/ValueRange.h"
 #include "mlir/IR/Visitors.h"
@@ -33,7 +34,6 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <algorithm>
-#include <type_traits>
 #include <utility>
 
 namespace mlir::gccjit {
@@ -72,16 +72,19 @@ class RegionVisitor {
   Region &region [[maybe_unused]];
   llvm::DenseMap<Value, Expr> exprCache;
   llvm::DenseMap<Block *, gcc_jit_block *> blocks;
+  bool valueMaterialization;
+  gcc_jit_block *insertionPoint;
 
 public:
-  RegionVisitor(GCCJITTranslation &translator, Region &region);
+  RegionVisitor(GCCJITTranslation &translator, Region &region,
+                gcc_jit_block *blk = nullptr);
   GCCJITTranslation &getTranslator() const;
   gcc_jit_context *getContext() const;
   MLIRContext *getMLIRContext() const;
   void translateIntoContext();
 
 private:
-  Expr visitExpr(Value value);
+  Expr visitExpr(Value value, bool toplevel = false);
   void visitExprs(ValueRange values, llvm::SmallVectorImpl<Expr> &result);
   void visitExprAsRValue(ValueRange operands,
                          llvm::SmallVectorImpl<gcc_jit_rvalue *> &result);
@@ -109,78 +112,13 @@ private:
   void visitJumpOp(gcc_jit_block *blk, JumpOp op);
   void visitAsmOp(gcc_jit_block *blk, AsmOp op);
   void visitAsmGotoOp(gcc_jit_block *blk, AsmGotoOp op);
+  void visitExprOp(gcc_jit_block *blk, ExprOp op);
 
   template <typename OpTy>
   void populateExtendedAsm(gcc_jit_extended_asm *extAsm, OpTy op);
 };
 
 } // namespace
-
-void GCCJITTranslation::convertTypes(
-    mlir::TypeRange types, llvm::SmallVector<gcc_jit_type *> &result) {
-  for (auto type : types)
-    result.push_back(convertType(type));
-}
-
-gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
-  if (auto it = typeMap.find(type); it != typeMap.end())
-    return it->second;
-  auto *res = llvm::TypeSwitch<mlir::Type, gcc_jit_type *>(type)
-                  .Case([&](gccjit::LValueType t) {
-                    return convertType(t.getInnerType());
-                  })
-                  .Case([&](gccjit::PointerType t) {
-                    auto *pointee = convertType(t.getElementType());
-                    return gcc_jit_type_get_pointer(pointee);
-                  })
-                  .Case([&](gccjit::QualifiedType t) {
-                    auto *res = convertType(t.getElementType());
-                    if (t.getIsConst())
-                      res = gcc_jit_type_get_const(res);
-                    if (t.getIsRestrict())
-                      res = gcc_jit_type_get_restrict(res);
-                    if (t.getIsVolatile())
-                      res = gcc_jit_type_get_volatile(res);
-                    return res;
-                  })
-                  .Case([&](gccjit::IntType t) {
-                    auto kind = t.getKind();
-                    return gcc_jit_context_get_type(ctxt, kind);
-                  })
-                  .Case([&](gccjit::FloatType t) {
-                    auto kind = t.getKind();
-                    return gcc_jit_context_get_type(ctxt, kind);
-                  })
-                  .Case([&](gccjit::ComplexType t) {
-                    auto kind = t.getKind();
-                    return gcc_jit_context_get_type(ctxt, kind);
-                  })
-                  .Case([&](gccjit::VoidType t) {
-                    return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_VOID);
-                  })
-                  .Case([&](gccjit::ArrayType t) {
-                    auto *elemType = convertType(t.getElementType());
-                    auto size = t.getSize();
-                    return gcc_jit_context_new_array_type(ctxt, nullptr,
-                                                          elemType, size);
-                  })
-                  .Case([&](gccjit::VectorType t) {
-                    auto *elemType = convertType(t.getElementType());
-                    auto size = t.getNumUnits();
-                    return gcc_jit_type_get_vector(elemType, size);
-                  })
-                  .Case([&](gccjit::StructType t) -> gcc_jit_type * {
-                    gcc_jit_struct *rawType =
-                        getOrCreateStructEntry(t).getRawHandle();
-                    return gcc_jit_struct_as_type(rawType);
-                  })
-                  .Case([&](gccjit::UnionType t) -> gcc_jit_type * {
-                    return getOrCreateUnionEntry(t).getRawHandle();
-                  })
-                  .Default([](mlir::Type) { return nullptr; });
-  typeMap[type] = res;
-  return res;
-}
 
 GCCJITTranslation::GCCJITTranslation() : ctxt(gcc_jit_context_acquire()) {}
 
@@ -435,8 +373,9 @@ void GCCJITTranslation::translateGlobalInitializers() {
 /// RegionVisitor
 ///===----------------------------------------------------------------------===///
 
-RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
-    : translator(translator), region(region) {
+RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
+                             gcc_jit_block *blk)
+    : translator(translator), region(region), insertionPoint(blk) {
   if (auto funcOp = dyn_cast<gccjit::FuncOp>(region.getParentOp())) {
     auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
                                       funcOp.getSymName());
@@ -446,25 +385,40 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
       exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
     }
     AsmState asmState(funcOp);
-    region.walk([&](LocalOp local) {
-      auto *type = translator.convertType(local.getType());
-      auto *loc = translator.getLocation(local.getLoc());
+    region.walk([&](Operation *op) {
+      if (op->getNumResults() != 1)
+        return WalkResult::skip();
+
+      auto res = op->getResult(0);
+
+      if (auto globalOp = dyn_cast<gccjit::GetGlobalOp>(op)) {
+        auto *lvalue = translator.getGlobalLValue(globalOp.getSymAttr());
+        exprCache[res] = lvalue;
+        return WalkResult::skip();
+      }
+
+      auto *type = translator.convertType(res.getType());
+      auto *loc = translator.getLocation(res.getLoc());
       std::string name;
-      if (!local.getVarName()) {
+      auto varName = op->getAttrOfType<StringAttr>("gccjit.var_name");
+      if (!varName) {
         std::string buffer;
         llvm::raw_string_ostream bufferStream(buffer);
-        local.getResult().printAsOperand(bufferStream, asmState);
+        res.printAsOperand(bufferStream, asmState);
         bufferStream.flush();
         name = "__var";
         for (auto &c : buffer)
           if (isalnum(c))
             name.push_back(c);
       } else {
-        name = local.getVarName()->str();
+        name = varName.getValue().str();
       }
       auto *lvalue =
           gcc_jit_function_new_local(function, loc, type, name.c_str());
-      exprCache[local] = lvalue;
+      exprCache[res] = lvalue;
+      return op->hasTrait<OpTrait::IsIsolatedFromAbove>()
+                 ? WalkResult::skip()
+                 : WalkResult::advance();
     });
     for (auto &block : region) {
       std::string buffer;
@@ -478,6 +432,9 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region)
       auto *blk = gcc_jit_function_new_block(function, name.c_str());
       blocks[&block] = blk;
     }
+    valueMaterialization = true;
+  } else {
+    valueMaterialization = false;
   }
 }
 
@@ -505,13 +462,17 @@ void RegionVisitor::translateIntoContext() {
             .Case([&](JumpOp op) { visitJumpOp(blk, op); })
             .Case([&](AsmOp op) { visitAsmOp(blk, op); })
             .Case([&](AsmGotoOp op) { visitAsmGotoOp(blk, op); })
+            .Case([&](ExprOp op) { visitExprOp(blk, op); })
+            // skip variable declaration
+            .Case<GetGlobalOp, LocalOp>([&](auto) { return; })
             .Default([&](Operation *op) {
-              if (op->hasAttr("gccjit.eval")) {
+              if (valueMaterialization) {
                 auto *loc = translator.getLocation(op->getLoc());
                 if (op->getNumResults() == 1) {
                   auto result = op->getResult(0);
-                  auto rvalue = visitExpr(result);
-                  gcc_jit_block_add_eval(blk, loc, rvalue);
+                  auto rvalue = visitExpr(result, true);
+                  auto lvalue = exprCache[result];
+                  gcc_jit_block_add_assignment(blk, loc, lvalue, rvalue);
                 } else if (auto callOp = dyn_cast<CallOp>(op)) {
                   auto *funcCall = visitExprWithoutCache(callOp);
                   gcc_jit_block_add_eval(blk, loc, funcCall);
@@ -525,30 +486,41 @@ void RegionVisitor::translateIntoContext() {
     }
     return;
   }
+
+  assert(mlir::isa<ExprOp>(parent) || mlir::isa<GlobalOp>(parent));
+  assert(region.getBlocks().size() == 1 && !valueMaterialization);
+  Block &block = region.getBlocks().front();
+  auto terminator = cast<gccjit::ReturnOp>(block.getTerminator());
+  auto value = terminator->getOperand(0);
+  auto rvalue = visitExpr(value);
+
   if (auto globalOp = dyn_cast<gccjit::GlobalOp>(parent)) {
-    assert(region.getBlocks().size() == 1 &&
-           "global initializer region should have a single block");
-    Block &block = region.getBlocks().front();
-    auto terminator = cast<gccjit::ReturnOp>(block.getTerminator());
-    auto value = terminator->getOperand(0);
-    auto rvalue = visitExpr(value);
     auto symName = SymbolRefAttr::get(getMLIRContext(), globalOp.getSymName());
     auto *lvalue = getTranslator().getGlobalLValue(symName);
     gcc_jit_global_set_initializer_rvalue(lvalue, rvalue);
     return;
   }
+
+  if (auto exprOp = dyn_cast<ExprOp>(parent)) {
+    assert(insertionPoint != nullptr);
+    auto lvalue = exprCache[exprOp.getResult()];
+    auto *loc = translator.getLocation(exprOp.getLoc());
+    gcc_jit_block_add_assignment(insertionPoint, loc, lvalue, rvalue);
+    return;
+  }
+
   llvm_unreachable("unknown region parent");
 }
 
-Expr RegionVisitor::visitExpr(Value value) {
-  auto &cached = exprCache[value];
+Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
+  auto *cached = toplevel ? nullptr : &exprCache[value];
 
-  if (!cached) {
+  if (toplevel || !*cached) {
     auto *op = value.getDefiningOp();
     if (op->getNumResults() != 1)
       llvm_unreachable("expected single result operation");
 
-    cached =
+    Expr res =
         llvm::TypeSwitch<Operation *, Expr>(op)
             .Case([&](ConstantOp op) { return visitExprWithoutCache(op); })
             .Case([&](LiteralOp op) { return visitExprWithoutCache(op); })
@@ -568,9 +540,17 @@ Expr RegionVisitor::visitExpr(Value value) {
             .Default([](Operation *) -> Expr {
               llvm_unreachable("unknown expression type");
             });
-  }
 
-  return cached;
+    if (!toplevel)
+      *cached = res;
+    return res;
+  }
+  return *cached;
+}
+
+void RegionVisitor::visitExprOp(gcc_jit_block *blk, ExprOp op) {
+  RegionVisitor visitor(getTranslator(), op.getRegion(), blk);
+  visitor.translateIntoContext();
 }
 
 void RegionVisitor::visitExprs(ValueRange values,
@@ -900,78 +880,6 @@ void GCCJITTranslation::translateFunctions() {
     RegionVisitor visitor(*this, region);
     visitor.translateIntoContext();
   }
-}
-
-template <typename RawCreator>
-static auto
-convertRecordType(GCCJITTranslation &translation,
-                  GCCJITRecordTypeInterface type,
-                  llvm::SmallVector<gcc_jit_field *> &convertedFields,
-                  RawCreator &&rawHandleCreator) {
-  static_assert(
-      std::is_invocable_v<RawCreator &&, gcc_jit_context *, gcc_jit_location *,
-                          const char *, int, gcc_jit_field **>);
-
-  // TODO: handle opaque struct type.
-  // TODO: encode location information in the record fields.
-
-  convertedFields.clear();
-  convertedFields.reserve(type.getRecordFields().size());
-  for (Attribute fieldOpaqueAttr : type.getRecordFields()) {
-    auto fieldAttr = cast<FieldAttr>(fieldOpaqueAttr);
-
-    int fieldBitWidth = fieldAttr.getBitWidth();
-    std::string fieldName = fieldAttr.getName().str();
-    gcc_jit_type *fieldType = translation.convertType(fieldAttr.getType());
-
-    gcc_jit_field *field =
-        fieldAttr.getBitWidth()
-            ? gcc_jit_context_new_bitfield(translation.getContext(),
-                                           /*loc=*/nullptr, fieldType,
-                                           fieldBitWidth, fieldName.c_str())
-            : gcc_jit_context_new_field(translation.getContext(),
-                                        /*loc=*/nullptr, fieldType,
-                                        fieldName.c_str());
-    convertedFields.push_back(field);
-  }
-
-  std::string recordName = type.getRecordName().str();
-
-  gcc_jit_location *recordLoc = nullptr;
-  if (type.getRecordLoc())
-    recordLoc = translation.getLocation(type.getRecordLoc());
-
-  return std::invoke(std::forward<RawCreator>(rawHandleCreator),
-                     translation.getContext(), recordLoc, recordName.c_str(),
-                     convertedFields.size(), convertedFields.data());
-}
-
-GCCJITTranslation::StructEntry &
-GCCJITTranslation::getOrCreateStructEntry(StructType type) {
-  auto structMapIter = structMap.find(type);
-  if (structMapIter == structMap.end()) {
-    llvm::SmallVector<gcc_jit_field *> convertedFields;
-    gcc_jit_struct *rawType = convertRecordType(
-        *this, type, convertedFields, gcc_jit_context_new_struct_type);
-    structMapIter = structMap.insert({type, StructEntry(rawType)}).first;
-  }
-
-  return structMapIter->second;
-}
-
-GCCJITTranslation::UnionEntry &
-GCCJITTranslation::getOrCreateUnionEntry(UnionType type) {
-  auto unionMapIter = unionMap.find(type);
-  if (unionMapIter == unionMap.end()) {
-    llvm::SmallVector<gcc_jit_field *> convertedFields;
-    gcc_jit_type *rawType = convertRecordType(*this, type, convertedFields,
-                                              gcc_jit_context_new_union_type);
-    unionMapIter =
-        unionMap.insert({type, UnionEntry(rawType, std::move(convertedFields))})
-            .first;
-  }
-
-  return unionMapIter->second;
 }
 
 //===----------------------------------------------------------------------===//

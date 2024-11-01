@@ -265,16 +265,14 @@ def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
   let arguments = (ins 
     OptionalAttr<StrAttr>:$reg_name,
     OptionalAttr<IndexAttr>:$alignment,
-    OptionalAttr<TLSModelAttr>:$tls_model,
-    OptionalAttr<StrAttr>:$var_name
+    OptionalAttr<TLSModelAttr>:$tls_model
   );
   let results = (outs GCCJIT_LValueType:$var);
   let assemblyFormat = [{
     oilist ( 
       `reg` `(` qualified($reg_name) `)` |
       `align` `(` qualified($alignment) `)` |
-      `tls_model` `(` qualified($tls_model) `)` |
-      `var_name` `(` qualified($var_name) `)`
+      `tls_model` `(` qualified($tls_model) `)`
     )
     `:` type($var) attr-dict
   }];

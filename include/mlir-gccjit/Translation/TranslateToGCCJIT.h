@@ -15,6 +15,7 @@
 #ifndef MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 #define MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 
+#include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Location.h"
