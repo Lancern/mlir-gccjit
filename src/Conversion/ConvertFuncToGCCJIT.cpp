@@ -12,33 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "mlir-gccjit/Conversion/Conversions.h"
 #include "mlir-gccjit/Conversion/TypeConverter.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir-gccjit/Passes.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/IR/Attributes.h"
+#include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/IR/Operation.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Types.h"
+#include "mlir/IR/Value.h"
 #include "mlir/Support/LLVM.h"
+#include "mlir/Transforms/DialectConversion.h"
+#include <llvm-20/llvm/ADT/SmallVector.h>
+#include <llvm-20/llvm/Support/raw_ostream.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
-
-namespace mlir::gccjit {
-void populateFuncToGCCJITPatterns(MLIRContext *context,
-                                  GCCJITTypeConverter &typeConverter,
-                                  RewritePatternSet &patterns,
-                                  SymbolTable &symbolTable);
-} // namespace mlir::gccjit
 
 namespace {
 
@@ -56,17 +58,15 @@ void ConvertFuncToGCCJITPass::runOnOperation() {
   populateFuncToGCCJITPatterns(&getContext(), typeConverter, patterns,
                                symbolTable);
   mlir::ConversionTarget target(getContext());
-  target.addLegalDialect<gccjit::GCCJITDialect, cf::ControlFlowDialect,
-                         BuiltinDialect>();
-  target.addLegalOp<ModuleOp>();
+  target.addLegalDialect<gccjit::GCCJITDialect>();
+  target.addLegalOp<ModuleOp, UnrealizedConversionCastOp>();
   target.addIllegalDialect<mlir::func::FuncDialect>();
-  llvm::SmallVector<mlir::Operation *> ops;
-  moduleOp.walk([&](mlir::Operation *op) {
-    if (isa<func::FuncOp, func::ReturnOp, func::CallIndirectOp, func::CallOp,
-            func::ConstantOp>(op))
-      ops.push_back(op);
-  });
-  if (failed(applyPartialConversion(ops, target, std::move(patterns))))
+  ConversionConfig config;
+  llvm::DenseSet<Operation *> unlegalizedOps;
+  config.unlegalizedOps = &unlegalizedOps;
+  config.notifyCallback = [&](Diagnostic &diag) { diag.print(llvm::errs()); };
+  if (failed(applyPartialConversion(moduleOp, target, std::move(patterns),
+                                    config)))
     signalPassFailure();
 }
 
@@ -213,6 +213,29 @@ private:
     }
   }
 
+  void convertEntryBlockArguments(
+      Block *blk, mlir::ConversionPatternRewriter &rewriter,
+      llvm::DenseMap<BlockArgument, Value> argMap) const {
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(blk);
+    if (blk->getNumArguments() == 0)
+      return;
+    llvm::SmallVector<Type> argTypes;
+    for (auto blkArg : blk->getArguments()) {
+      auto originalTy = blkArg.getType();
+      auto convertedTy = getTypeConverter()->convertType(originalTy);
+      auto varTy = LValueType::get(getContext(), convertedTy);
+      argMap[blkArg] = blkArg;
+      blkArg.setType(varTy);
+      auto loaded =
+          rewriter.create<AsRValueOp>(blkArg.getLoc(), convertedTy, blkArg);
+      auto coercion = rewriter.create<UnrealizedConversionCastOp>(
+          blkArg.getLoc(), originalTy, loaded.getResult());
+      TypeConverter::SignatureConversion conversion;
+    }
+    rewriter.applySignatureConversion(blk, conversion);
+  }
+
 public:
   using GCCJITLoweringPattern::GCCJITLoweringPattern;
   mlir::LogicalResult
@@ -225,53 +248,17 @@ public:
     auto funcOp = rewriter.create<gccjit::FuncOp>(
         op.getLoc(), op.getSymNameAttr(), kind, TypeAttr::get(convertedType),
         ArrayAttr::get(getContext(), {}));
+
     if (!op.getFunctionBody().empty()) {
+      llvm::DenseMap<BlockArgument, Value> argMap;
       rewriter.inlineRegionBefore(op.getFunctionBody(), funcOp.getBody(),
                                   funcOp.getBody().end());
-      if (funcOp.getBody().getNumArguments() != 0) {
-        llvm::SmallVector<Type> argTypes;
-        llvm::SmallVector<Location> argLocs;
-        std::transform(
-            funcOp.getBody().args_begin(), funcOp.getBody().args_end(),
-            std::back_inserter(argTypes), [&](BlockArgument arg) {
-              auto originalTy = arg.getType();
-              auto convertedTy = getTypeConverter()->convertType(originalTy);
-              auto wrapped =
-                  LValueType::get(convertedTy.getContext(), convertedTy);
-              return wrapped;
-            });
-        std::transform(funcOp.getBody().args_begin(),
-                       funcOp.getBody().args_end(), std::back_inserter(argLocs),
-                       [&](BlockArgument arg) { return arg.getLoc(); });
-        {
-          OpBuilder::InsertionGuard guard(rewriter);
-          auto *currentEntry = &funcOp.getBody().front();
-          auto *newEntry =
-              rewriter.createBlock(&funcOp.getBody(), funcOp.getBody().begin());
-          newEntry->addArguments(argTypes, argLocs);
-          llvm::SmallVector<Value> rvalues;
-          std::transform(
-              newEntry->args_begin(), newEntry->args_end(),
-              std::back_inserter(rvalues), [&](BlockArgument arg) {
-                Value rvalue = rewriter.create<gccjit::AsRValueOp>(
-                    arg.getLoc(),
-                    cast<LValueType>(arg.getType()).getInnerType(), arg);
-                if (rvalue.getType() !=
-                    currentEntry->getArgument(arg.getArgNumber()).getType())
-                  rvalue = rewriter
-                               .create<UnrealizedConversionCastOp>(
-                                   arg.getLoc(),
-                                   currentEntry->getArgument(arg.getArgNumber())
-                                       .getType(),
-                                   rvalue)
-                               ->getResult(0);
-                return rvalue;
-              });
-          rewriter.create<cf::BranchOp>(op.getLoc(), currentEntry, rvalues);
-        }
-      }
+      if (funcOp.getBody().getNumArguments() != 0)
+        convertEntryBlockArguments(&funcOp.getBody().front(), rewriter, argMap);
     }
+
     rewriter.eraseOp(op);
+
     return mlir::success();
   }
 };

@@ -160,11 +160,13 @@ GCCJITTypeConverter::getMemrefDescriptorType(mlir::MemRefType type) const {
   auto dimOrStrideType =
       gccjit::ArrayType::get(type.getContext(), indexType, rank);
   SmallVector<Attribute> fields;
+  llvm::StringRef names[]{
+      "base", "aligned", "offset", "sizes", "strides",
+  };
   for (auto [idx, field] :
        llvm::enumerate(ArrayRef<Type>{elementPtrType, elementPtrType, indexType,
                                       dimOrStrideType, dimOrStrideType})) {
-    auto name = Twine("__field_").concat(Twine(idx)).str();
-    auto nameAttr = StringAttr::get(type.getContext(), name);
+    auto nameAttr = StringAttr::get(type.getContext(), names[idx]);
     fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
   }
   auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);

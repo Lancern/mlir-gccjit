@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
   registry.insert<mlir::gccjit::GCCJITDialect>();
   mlir::registerAllExtensions(registry);
   mlir::registerAllPasses();
-  // mlir::gccjit::registerGCCJITPasses();
+  mlir::gccjit::registerGCCJITPasses();
   return failed(mlir::MlirOptMain(
       argc, argv, "GCCJIT analysis and optimization driver\n", registry));
 }
