@@ -299,6 +299,8 @@ constexpr ParseNamedUnitAttr parseAsmInlineAttr{"inline"};
 constexpr PrintNamedUnitAttr printAsmInlineAttr{"inline"};
 constexpr ParseNamedUnitAttr parseAsmVolatileAttr{"volatile"};
 constexpr PrintNamedUnitAttr printAsmVolatileAttr{"volatile"};
+constexpr ParseNamedUnitAttr parseLazyAttribute{"lazy"};
+constexpr PrintNamedUnitAttr printLazyAttribute{"lazy"};
 
 ParseResult
 parseAsmOperands(OpAsmParser &parser, ArrayAttr &constrains, ArrayAttr &symbols,

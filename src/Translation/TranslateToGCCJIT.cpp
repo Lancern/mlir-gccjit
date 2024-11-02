@@ -323,7 +323,7 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
                      auto index = pair.index();
                      auto type = pair.value();
                      auto name =
-                         llvm::Twine("__arg").concat(llvm::Twine(index)).str();
+                         llvm::Twine("%arg").concat(llvm::Twine(index)).str();
                      return gcc_jit_context_new_param(
                          ctxt, /*todo: location*/ nullptr, type, name.c_str());
                    });
@@ -415,6 +415,11 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
       if (isa<LValueType>(op->getResult(0).getType()) && !isa<LocalOp>(op))
         return WalkResult::skip();
 
+      // skip lazy evaluated expressions
+      if (auto exprOp = dyn_cast<ExprOp>(op))
+        if (exprOp.getLazy())
+          return WalkResult::skip();
+
       auto *type = translator.convertType(res.getType());
       auto *loc = translator.getLocation(res.getLoc());
       std::string name;
@@ -479,6 +484,9 @@ Expr RegionVisitor::translateIntoContext() {
                 auto *loc = translator.getLocation(op->getLoc());
                 if (op->getNumResults() == 1 &&
                     !isa<LValueType>(op->getResult(0).getType())) {
+                  if (auto exprOp = dyn_cast<ExprOp>(op))
+                    if (exprOp.getLazy())
+                      return;
                   auto result = op->getResult(0);
                   auto rvalue = visitExpr(result, true);
                   auto lvalue = lookupExpr(result);

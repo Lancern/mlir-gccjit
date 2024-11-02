@@ -337,12 +337,15 @@ def ExprOp : GCCJIT_Op<"expr"> {
       %2 = gccjit.binary plus %0, %1 : !gccjit.int<32>, !gccjit.int<32>
       gccjit.return %2 : !gccjit.int<32>
     } : !gccjit.int<32>
+    The expr operation can be marked with a lazy attribute. If such an attribute exists,
+    the expr will not be materialized until it is used.
     ```
   }];
+  let arguments = (ins UnitAttr:$lazy);
   let results = (outs AnyType:$result);
   let regions = (region AnyRegion:$body);
   let assemblyFormat = [{
-    $body `:` type($result) attr-dict
+    custom<LazyAttribute>($lazy) $body `:` type($result) attr-dict
   }];
 }
 
