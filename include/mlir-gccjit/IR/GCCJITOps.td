@@ -705,28 +705,10 @@ def DerefOp : GCCJIT_Op<"deref"> {
     %res = gccjit.deref (%ptr : !gccjit.ptr<!i32>) : !gccjit.lvalue<!i32>
     ```
   }];
-  let arguments = (ins GCCJIT_PointerType:$ptr);
+  let arguments = (ins GCCJIT_PointerType:$ptr, Optional<GCCJIT_IntType>:$offset);
   let results = (outs GCCJIT_LValueType:$result);
   let assemblyFormat = [{
-    `(` $ptr `:` type($ptr) `)` `:` type($result) attr-dict
-  }];
-}
-
-//===----------------------------------------------------------------------===//
-// Array Access
-//===----------------------------------------------------------------------===//
-def ArrayAccessOp : GCCJIT_Op<"array_access"> {
-  let summary = "Array indexing";
-  let description = [{
-    The "array_idx" operation represents an array indexing operation.
-    ```mlir
-    %res = gccjit.array_idx %array[%idx] : (!gccjit.array<!i32, 10>, !i32) -> !gccjit.lvalue<!i32>
-    ```
-  }];
-  let arguments = (ins GCCJIT_PointerType:$array, GCCJIT_IntType:$idx);
-  let results = (outs GCCJIT_LValueType:$result);
-  let assemblyFormat = [{
-    $array `[` $idx `]` `:` functional-type(operands, results) attr-dict
+    `(` $ptr `:` type($ptr) (`,` $offset^ `:` type($offset) )? `)` `:` type($result) attr-dict
   }];
 }
 

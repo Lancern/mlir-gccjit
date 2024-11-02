@@ -21,7 +21,7 @@ module @test attributes {
 } {
     gccjit.func imported @printf(!str, ...) -> !i32
 
-    gccjit.global internal @integer_array array(#gccjit.byte_array<[
+    gccjit.global internal @integer_array link_section("rodata") array(#gccjit.byte_array<[
         0,0,0,0,
         1,0,0,0,
         2,0,0,0,
@@ -57,7 +57,7 @@ module @test attributes {
               %11 = gccjit.get_global @integer_array : !gccjit.lvalue<!i32_arr10>
               %12 = gccjit.addr (%11 : !gccjit.lvalue<!i32_arr10>) : !gccjit.ptr<!i32_arr10>
               %13 = gccjit.bitcast %12 : !gccjit.ptr<!i32_arr10> to !i32_ptr
-              %14 = gccjit.array_access %13 [%10] : (!i32_ptr, !i32) -> !gccjit.lvalue<!i32>
+              %14 = gccjit.deref (%13 : !i32_ptr, %10 : !i32) : !var32
               %15 = gccjit.as_rvalue %14 : !var32 to !i32
               gccjit.return %15 : !i32
             } : !i32

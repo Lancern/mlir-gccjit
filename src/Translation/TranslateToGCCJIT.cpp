@@ -106,7 +106,6 @@ private:
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
   gcc_jit_rvalue *visitExprWithoutCache(ExprOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
-  gcc_jit_lvalue *visitExprWithoutCache(ArrayAccessOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -546,7 +545,6 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](GetGlobalOp op) { return visitExprWithoutCache(op); })
             .Case([&](ExprOp op) { return visitExprWithoutCache(op); })
             .Case([&](DerefOp op) { return visitExprWithoutCache(op); })
-            .Case([&](ArrayAccessOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
               op->dump();
               llvm::report_fatal_error("unknown expression type");
@@ -560,16 +558,12 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
 }
 
 gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(DerefOp op) {
-  auto operand = visitExpr(op.getOperand());
+  auto ptr = visitExpr(op.getPtr());
   auto *loc = getTranslator().getLocation(op.getLoc());
-  return gcc_jit_rvalue_dereference(operand, loc);
-}
-
-gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(ArrayAccessOp op) {
-  auto base = visitExpr(op.getArray());
-  auto index = visitExpr(op.getIdx());
-  auto *loc = getTranslator().getLocation(op.getLoc());
-  return gcc_jit_context_new_array_access(getContext(), loc, base, index);
+  if (!op.getOffset())
+    return gcc_jit_rvalue_dereference(ptr, loc);
+  auto offset = visitExpr(op.getOffset());
+  return gcc_jit_context_new_array_access(getContext(), loc, ptr, offset);
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(ExprOp op) {
