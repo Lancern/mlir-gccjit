@@ -143,6 +143,22 @@ def NullAttr : GCCJIT_Attr<"Null", "null", [TypedAttrInterface]> {
 }
 
 //===----------------------------------------------------------------------===//
+// SourceLoc Attr
+//===----------------------------------------------------------------------===//
+
+def SourceLocAttr : GCCJIT_Attr<"SourceLoc", "loc"> {
+  let summary = "Source location";
+  let description = [{
+    Represent a source location in GCCJIT.
+  }];
+  let parameters = (ins "mlir::StringAttr":$filename, "int":$line,
+                        "int":$column);
+  let assemblyFormat = [{
+    `<` $filename `:` $line `:` $column `>`
+  }];
+}
+
+//===----------------------------------------------------------------------===//
 // Record field attribute
 //===----------------------------------------------------------------------===//
 
@@ -157,10 +173,25 @@ def FieldAttr : GCCJIT_Attr<"Field", "field"> {
   }];
 
   let parameters = (ins "mlir::StringAttr":$name, "mlir::Type":$type,
-                        OptionalParameter<"unsigned">:$bitWidth);
+                        OptionalParameter<"unsigned">:$bitWidth,
+                        OptionalParameter<"mlir::gccjit::SourceLocAttr">:$loc);
+
+  let builders = [
+    AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type), [{
+      return get($_ctxt, name, type, 0, mlir::gccjit::SourceLocAttr{});
+    }]>,
+    AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type,
+                     "unsigned":$bitWidth), [{
+      return get($_ctxt, name, type, bitWidth, mlir::gccjit::SourceLocAttr{});
+    }]>,
+    AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type,
+                     "mlir::gccjit::SourceLocAttr":$loc), [{
+      return get($_ctxt, name, type, 0, loc);
+    }]>,
+  ];
 
   let assemblyFormat = [{
-    `<` $type $name (`:` $bitWidth^)? `>`
+    `<` $type $name (`:` $bitWidth^)? `>` ($loc^)?
   }];
 }
 

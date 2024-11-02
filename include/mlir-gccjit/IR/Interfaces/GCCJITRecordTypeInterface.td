@@ -34,7 +34,7 @@ def GCCJITRecordTypeInterface : TypeInterface<"GCCJITRecordTypeInterface"> {
       [{
         Get the source location of this record.
       }],
-      /*retTy=*/"LocationAttr",
+      /*retTy=*/"mlir::gccjit::SourceLocAttr",
       /*methodName=*/"getRecordLoc"
     >
   ];

@@ -15,6 +15,7 @@
 #ifndef MLIR_GCCJIT_IR_GCCJIT_TYPES_H
 #define MLIR_GCCJIT_IR_GCCJIT_TYPES_H
 
+#include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/Interfaces/GCCJITRecordTypeInterface.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -23,6 +24,7 @@
 
 namespace mlir::gccjit {
 class FieldAttr;
+class SourceLocAttr;
 } // namespace mlir::gccjit
 
 #define GET_TYPEDEF_CLASSES

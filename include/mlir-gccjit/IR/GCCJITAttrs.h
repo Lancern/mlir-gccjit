@@ -16,7 +16,12 @@
 #define MLIR_GCCJIT_IR_GCCJIT_OPS_ATTRS_H
 
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
-#include "mlir-gccjit/IR/GCCJITTypes.h"
+
+namespace mlir::gccjit {
+class IntType;
+class FloatType;
+class PointerType;
+} // namespace mlir::gccjit
 
 #define GET_ATTRDEF_CLASSES
 #include "mlir-gccjit/IR/GCCJITOpsAttributes.h.inc"

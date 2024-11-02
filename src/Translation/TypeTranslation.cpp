@@ -80,7 +80,6 @@ convertRecordType(GCCJITTranslation &translation,
                           const char *, int, gcc_jit_field **>);
 
   // TODO: handle opaque struct type.
-  // TODO: encode location information in the record fields.
 
   convertedFields.clear();
   convertedFields.reserve(type.getRecordFields().size());
@@ -91,25 +90,29 @@ convertRecordType(GCCJITTranslation &translation,
     std::string fieldName = fieldAttr.getName().str();
     gcc_jit_type *fieldType = translation.convertType(fieldAttr.getType());
 
+    SourceLocAttr fieldLoc = fieldAttr.getLoc();
+    gcc_jit_location *loc = nullptr;
+    if (fieldLoc)
+      loc = translation.convertLocation(fieldLoc);
+
     gcc_jit_field *field =
         fieldAttr.getBitWidth()
-            ? gcc_jit_context_new_bitfield(translation.getContext(),
-                                           /*loc=*/nullptr, fieldType,
-                                           fieldBitWidth, fieldName.c_str())
-            : gcc_jit_context_new_field(translation.getContext(),
-                                        /*loc=*/nullptr, fieldType,
-                                        fieldName.c_str());
+            ? gcc_jit_context_new_bitfield(translation.getContext(), loc,
+                                           fieldType, fieldBitWidth,
+                                           fieldName.c_str())
+            : gcc_jit_context_new_field(translation.getContext(), loc,
+                                        fieldType, fieldName.c_str());
     convertedFields.push_back(field);
   }
 
   std::string recordName = type.getRecordName().str();
 
-  gcc_jit_location *recordLoc = nullptr;
-  if (type.getRecordLoc())
-    recordLoc = translation.getLocation(type.getRecordLoc());
+  gcc_jit_location *loc = nullptr;
+  if (SourceLocAttr recordLoc = type.getRecordLoc())
+    loc = translation.convertLocation(recordLoc);
 
   return std::invoke(std::forward<RawCreator>(rawHandleCreator),
-                     translation.getContext(), recordLoc, recordName.c_str(),
+                     translation.getContext(), loc, recordName.c_str(),
                      convertedFields.size(), convertedFields.data());
 }
 

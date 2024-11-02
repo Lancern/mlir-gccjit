@@ -44,9 +44,7 @@ using namespace mlir::gccjit;
 //===----------------------------------------------------------------------===//
 
 static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
-                                     ArrayAttr &fields, LocationAttr &loc) {
-  SMLoc startLoc = parser.getCurrentLocation();
-
+                                     ArrayAttr &fields, SourceLocAttr &loc) {
   if (parser.parseAttribute(name))
     return failure();
 
@@ -68,21 +66,21 @@ static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
     return failure();
 
   OptionalParseResult parseLocResult = parser.parseOptionalAttribute(loc);
-  if (!parseLocResult.has_value())
-    loc = parser.getEncodedSourceLoc(startLoc);
-  else if (parseLocResult.value())
+  if (parseLocResult.has_value() && parseLocResult.value())
     return failure();
 
   return success();
 }
 
 static void printRecordBody(AsmPrinter &printer, StringAttr name,
-                            ArrayAttr fields, LocationAttr loc) {
+                            ArrayAttr fields, SourceLocAttr loc) {
   printer << name << " {";
   llvm::interleaveComma(fields, printer, [&printer](mlir::Attribute elem) {
     printer << cast<FieldAttr>(elem);
   });
-  printer << "} " << loc;
+  printer << "}";
+  if (loc)
+    printer << " " << loc;
 }
 
 #define GET_TYPEDEF_CLASSES
@@ -490,7 +488,7 @@ verifyRecordFields(llvm::function_ref<InFlightDiagnostic()> emitError,
 
 LogicalResult mlir::gccjit::StructType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
-    ArrayAttr fields, LocationAttr loc) {
+    ArrayAttr fields, SourceLocAttr loc) {
   return verifyRecordFields(emitError, fields);
 }
 
@@ -502,13 +500,13 @@ mlir::ArrayAttr mlir::gccjit::StructType::getRecordFields() const {
   return getFields();
 }
 
-mlir::LocationAttr mlir::gccjit::StructType::getRecordLoc() const {
+mlir::gccjit::SourceLocAttr mlir::gccjit::StructType::getRecordLoc() const {
   return getLoc();
 }
 
 LogicalResult mlir::gccjit::UnionType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
-    ArrayAttr fields, LocationAttr loc) {
+    ArrayAttr fields, SourceLocAttr loc) {
   return verifyRecordFields(emitError, fields);
 }
 
@@ -520,7 +518,7 @@ mlir::ArrayAttr mlir::gccjit::UnionType::getRecordFields() const {
   return getFields();
 }
 
-mlir::LocationAttr mlir::gccjit::UnionType::getRecordLoc() const {
+mlir::gccjit::SourceLocAttr mlir::gccjit::UnionType::getRecordLoc() const {
   return getLoc();
 }
 

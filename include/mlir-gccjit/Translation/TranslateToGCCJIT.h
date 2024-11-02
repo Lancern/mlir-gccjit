@@ -58,6 +58,7 @@ public:
   void convertTypes(TypeRange types, llvm::SmallVector<gcc_jit_type *> &result);
 
   gcc_jit_location *getLocation(LocationAttr loc);
+  gcc_jit_location *convertLocation(SourceLocAttr loc);
 
   gcc_jit_lvalue *getGlobalLValue(SymbolRefAttr symbol);
   FunctionEntry getFunction(SymbolRefAttr symbol);

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <libgccjit.h>
+
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
-#include "libgccjit.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
+#include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir/IR/Attributes.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinAttributeInterfaces.h"

@@ -15,6 +15,7 @@
 #ifndef CLANG_INTERFACES_CIR_CIR_FPTYPEINTERFACE_H
 #define CLANG_INTERFACES_CIR_CIR_FPTYPEINTERFACE_H
 
+#include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/Types.h"
 

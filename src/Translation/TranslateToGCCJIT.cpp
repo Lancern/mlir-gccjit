@@ -169,6 +169,13 @@ gcc_jit_location *GCCJITTranslation::getLocation(LocationAttr loc) {
       .Default([](LocationAttr) { return nullptr; });
 }
 
+gcc_jit_location *GCCJITTranslation::convertLocation(SourceLocAttr loc) {
+  if (!loc)
+    return nullptr;
+  return gcc_jit_context_new_location(ctxt, loc.getFilename().str().c_str(),
+                                      loc.getLine(), loc.getColumn());
+}
+
 gcc_jit_lvalue *GCCJITTranslation::getGlobalLValue(SymbolRefAttr symbol) {
   return globalMap.lookup(symbol);
 }
