@@ -31,18 +31,130 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Operation.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/DialectConversion.h"
 #include <llvm-20/llvm/ADT/SmallVector.h>
-#include <llvm-20/llvm/Support/raw_ostream.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
 
 namespace {
+
+class GCCJITFunctionRewriter {
+  func::FuncOp op;
+  GCCJITTypeConverter &typeConverter;
+  llvm::DenseMap<BlockArgument, Value> argMap;
+  mlir::IRRewriter &rewriter;
+
+  FnKindAttr getFnKindAttr() {
+    auto visibility = op.getVisibility();
+    switch (visibility) {
+    case SymbolTable::Visibility::Public:
+      return FnKindAttr::get(op.getContext(), FnKind::Exported);
+    case SymbolTable::Visibility::Private:
+      return FnKindAttr::get(op.getContext(), op.getFunctionBody().empty()
+                                                  ? FnKind::Imported
+                                                  : FnKind::Internal);
+    case SymbolTable::Visibility::Nested:
+      return FnKindAttr::get(op.getContext(), FnKind::Imported);
+    }
+  }
+
+  void
+  convertEntryBlockArguments(Block *blk,
+                             llvm::DenseMap<BlockArgument, Value> &argMap) {
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPointToStart(blk);
+    if (blk->getNumArguments() == 0)
+      return;
+    llvm::SmallVector<Type> argTypes;
+    for (auto blkArg : blk->getArguments()) {
+      auto originalTy = blkArg.getType();
+      auto convertedTy = typeConverter.convertType(originalTy);
+      auto varTy = LValueType::get(op.getContext(), convertedTy);
+      argMap[blkArg] = blkArg;
+      blkArg.setType(varTy);
+      auto loaded =
+          rewriter.create<AsRValueOp>(blkArg.getLoc(), convertedTy, blkArg);
+      Value coerced;
+      if (convertedTy != originalTy) {
+        coerced = rewriter
+                      .create<UnrealizedConversionCastOp>(
+                          blkArg.getLoc(), originalTy, loaded.getResult())
+                      ->getResult(0);
+      } else {
+        coerced = loaded;
+      }
+      rewriter.replaceAllUsesExcept(blkArg, coerced, loaded);
+    }
+  }
+
+  void convertBlock(Block *blk, Block *entry,
+                    llvm::DenseMap<BlockArgument, Value> &argMap) {
+    OpBuilder::InsertionGuard guard(rewriter);
+    if (!blk->getNumArguments() || blk->isEntryBlock())
+      return;
+
+    for (auto arg : blk->getArguments()) {
+      rewriter.setInsertionPointToStart(entry);
+      auto originalTy = arg.getType();
+      auto convertedTy = typeConverter.convertType(originalTy);
+      auto varTy = LValueType::get(op.getContext(), convertedTy);
+      auto var = rewriter.create<LocalOp>(arg.getLoc(), varTy, nullptr, nullptr,
+                                          nullptr);
+      argMap[arg] = var;
+      rewriter.setInsertionPointToStart(blk);
+      auto loaded = rewriter.create<AsRValueOp>(arg.getLoc(), convertedTy, var);
+      Value coerced;
+      if (convertedTy != originalTy) {
+        coerced = rewriter
+                      .create<UnrealizedConversionCastOp>(
+                          arg.getLoc(), originalTy, loaded.getResult())
+                      ->getResult(0);
+      } else {
+        coerced = loaded;
+      }
+      rewriter.replaceAllUsesExcept(arg, coerced, loaded);
+    }
+    blk->eraseArguments([](BlockArgument arg) { return true; });
+  }
+
+public:
+  GCCJITFunctionRewriter(func::FuncOp op, GCCJITTypeConverter &typeConverter,
+                         mlir::IRRewriter &rewriter)
+      : op(op), typeConverter(typeConverter), rewriter(rewriter) {}
+
+  FuncOp rewrite() {
+    auto funcType = op.getFunctionType();
+    auto convertedType = typeConverter.convertFunctionType(funcType, false);
+    auto kind = getFnKindAttr();
+    rewriter.setInsertionPoint(op);
+    auto funcOp = rewriter.create<gccjit::FuncOp>(
+        op.getLoc(), op.getSymNameAttr(), kind, TypeAttr::get(convertedType),
+        ArrayAttr::get(op.getContext(), {}));
+
+    if (!op.getFunctionBody().empty()) {
+      llvm::DenseMap<BlockArgument, Value> argMap;
+      rewriter.inlineRegionBefore(op.getFunctionBody(), funcOp.getBody(),
+                                  funcOp.getBody().end());
+      if (funcOp.getBody().getNumArguments() != 0)
+        convertEntryBlockArguments(&funcOp.getBody().front(), argMap);
+
+      for (auto &blk : funcOp.getBody()) {
+        if (blk.isEntryBlock())
+          continue;
+        convertBlock(&blk, &funcOp.getBody().front(), argMap);
+      }
+    }
+
+    rewriter.eraseOp(op);
+    return funcOp;
+  }
+};
 
 struct ConvertFuncToGCCJITPass
     : public ConvertFuncToGCCJITBase<ConvertFuncToGCCJITPass> {
@@ -59,14 +171,23 @@ void ConvertFuncToGCCJITPass::runOnOperation() {
                                symbolTable);
   mlir::ConversionTarget target(getContext());
   target.addLegalDialect<gccjit::GCCJITDialect>();
-  target.addLegalOp<ModuleOp, UnrealizedConversionCastOp>();
   target.addIllegalDialect<mlir::func::FuncDialect>();
-  ConversionConfig config;
-  llvm::DenseSet<Operation *> unlegalizedOps;
-  config.unlegalizedOps = &unlegalizedOps;
-  config.notifyCallback = [&](Diagnostic &diag) { diag.print(llvm::errs()); };
-  if (failed(applyPartialConversion(moduleOp, target, std::move(patterns),
-                                    config)))
+  llvm::SmallVector<func::FuncOp> originalFuncs;
+  llvm::SmallVector<Operation *> ops;
+
+  for (auto func : moduleOp.getOps<mlir::func::FuncOp>())
+    originalFuncs.push_back(func);
+  {
+    IRRewriter rewriter(moduleOp->getContext());
+    rewriter.startOpModification(moduleOp);
+    for (auto func : originalFuncs) {
+      GCCJITFunctionRewriter funcRewriter(func, typeConverter, rewriter);
+      auto newOp = funcRewriter.rewrite();
+      ops.push_back(newOp);
+    }
+    rewriter.finalizeOpModification(moduleOp);
+  }
+  if (failed(applyPartialConversion(ops, target, std::move(patterns))))
     signalPassFailure();
 }
 
@@ -196,81 +317,13 @@ public:
     return mlir::success();
   }
 };
-
-class FuncOpLowering : public GCCJITLoweringPattern<func::FuncOp> {
-private:
-  FnKindAttr getFnKindAttr(func::FuncOp op) const {
-    auto visibility = op.getVisibility();
-    switch (visibility) {
-    case SymbolTable::Visibility::Public:
-      return FnKindAttr::get(op.getContext(), FnKind::Exported);
-    case SymbolTable::Visibility::Private:
-      return FnKindAttr::get(op.getContext(), op.getFunctionBody().empty()
-                                                  ? FnKind::Imported
-                                                  : FnKind::Internal);
-    case SymbolTable::Visibility::Nested:
-      return FnKindAttr::get(op.getContext(), FnKind::Imported);
-    }
-  }
-
-  void convertEntryBlockArguments(
-      Block *blk, mlir::ConversionPatternRewriter &rewriter,
-      llvm::DenseMap<BlockArgument, Value> argMap) const {
-    OpBuilder::InsertionGuard guard(rewriter);
-    rewriter.setInsertionPointToStart(blk);
-    if (blk->getNumArguments() == 0)
-      return;
-    llvm::SmallVector<Type> argTypes;
-    for (auto blkArg : blk->getArguments()) {
-      auto originalTy = blkArg.getType();
-      auto convertedTy = getTypeConverter()->convertType(originalTy);
-      auto varTy = LValueType::get(getContext(), convertedTy);
-      argMap[blkArg] = blkArg;
-      blkArg.setType(varTy);
-      auto loaded =
-          rewriter.create<AsRValueOp>(blkArg.getLoc(), convertedTy, blkArg);
-      auto coercion = rewriter.create<UnrealizedConversionCastOp>(
-          blkArg.getLoc(), originalTy, loaded.getResult());
-      TypeConverter::SignatureConversion conversion;
-    }
-    rewriter.applySignatureConversion(blk, conversion);
-  }
-
-public:
-  using GCCJITLoweringPattern::GCCJITLoweringPattern;
-  mlir::LogicalResult
-  matchAndRewrite(func::FuncOp op, OpAdaptor adaptor,
-                  mlir::ConversionPatternRewriter &rewriter) const override {
-    auto funcType = op.getFunctionType();
-    auto convertedType =
-        getTypeConverter()->convertFunctionType(funcType, false);
-    auto kind = getFnKindAttr(op);
-    auto funcOp = rewriter.create<gccjit::FuncOp>(
-        op.getLoc(), op.getSymNameAttr(), kind, TypeAttr::get(convertedType),
-        ArrayAttr::get(getContext(), {}));
-
-    if (!op.getFunctionBody().empty()) {
-      llvm::DenseMap<BlockArgument, Value> argMap;
-      rewriter.inlineRegionBefore(op.getFunctionBody(), funcOp.getBody(),
-                                  funcOp.getBody().end());
-      if (funcOp.getBody().getNumArguments() != 0)
-        convertEntryBlockArguments(&funcOp.getBody().front(), rewriter, argMap);
-    }
-
-    rewriter.eraseOp(op);
-
-    return mlir::success();
-  }
-};
-
 } // namespace
 
 void mlir::gccjit::populateFuncToGCCJITPatterns(
     MLIRContext *context, GCCJITTypeConverter &typeConverter,
     RewritePatternSet &patterns, SymbolTable &symbolTable) {
   patterns.add<ReturnOpLowering, ConstantOpLowering, CallOpLowering,
-               CallIndirectOpLowering, FuncOpLowering>(symbolTable,
-                                                       typeConverter, context);
+               CallIndirectOpLowering>(symbolTable, typeConverter, context);
 }
 
 std::unique_ptr<Pass> mlir::gccjit::createConvertFuncToGCCJITPass() {
