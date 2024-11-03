@@ -6,6 +6,7 @@ add_mlir_dialect_library(MLIRGCCJITConversion
 
     DEPENDS
     MLIRGCCJIT
+    MLIRGCCJITPassIncGen
     ${dialect_libs}
     ${conversion_libs}
 
