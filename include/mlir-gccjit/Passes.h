@@ -15,10 +15,11 @@
 #ifndef MLIR_GCCJIT_PASSES_H
 #define MLIR_GCCJIT_PASSES_H
 
+#include <mlir/IR/BuiltinOps.h>
+#include <mlir/Pass/Pass.h>
+
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/Pass/Pass.h"
 
 namespace mlir::gccjit {
 

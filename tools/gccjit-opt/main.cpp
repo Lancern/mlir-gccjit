@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mlir/IR/DialectRegistry.h"
-#include "mlir/InitAllDialects.h"
-#include "mlir/InitAllExtensions.h"
-#include "mlir/InitAllPasses.h"
-#include "mlir/Tools/mlir-opt/MlirOptMain.h"
+#include <mlir/IR/DialectRegistry.h>
+#include <mlir/InitAllDialects.h>
+#include <mlir/InitAllExtensions.h>
+#include <mlir/InitAllPasses.h>
+#include <mlir/Tools/mlir-opt/MlirOptMain.h>
 
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 #include "mlir-gccjit/Passes.h"

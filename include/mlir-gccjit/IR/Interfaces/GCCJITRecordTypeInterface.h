@@ -15,9 +15,10 @@
 #ifndef CLANG_INTERFACES_CIR_CIR_FPTYPEINTERFACE_H
 #define CLANG_INTERFACES_CIR_CIR_FPTYPEINTERFACE_H
 
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/Types.h>
+
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/Types.h"
 
 /// Include the tablegen'd interface declarations.
 #include "mlir-gccjit/IR/Interfaces/GCCJITRecordTypeInterface.h.inc"

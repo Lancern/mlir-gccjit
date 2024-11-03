@@ -15,7 +15,7 @@
 #ifndef MLIR_GCCJIT_IR_GCCJIT_DIALECT_H
 #define MLIR_GCCJIT_IR_GCCJIT_DIALECT_H
 
-#include "mlir/IR/Dialect.h"
+#include <mlir/IR/Dialect.h>
 
 #include "mlir-gccjit/IR/GCCJITOpsDialect.h.inc"
 

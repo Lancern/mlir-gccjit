@@ -13,29 +13,33 @@
 // limitations under the License.
 
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
-#include "libgccjit.h"
+
+#include <algorithm>
+#include <utility>
+
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/Twine.h>
+#include <llvm/ADT/TypeSwitch.h>
+#include <llvm/Support/Error.h>
+#include <llvm/Support/ErrorHandling.h>
+#include <mlir/IR/AsmState.h>
+#include <mlir/IR/Block.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/Location.h>
+#include <mlir/IR/OpDefinition.h>
+#include <mlir/IR/TypeRange.h>
+#include <mlir/IR/ValueRange.h>
+#include <mlir/IR/Visitors.h>
+
+#include <libgccjit.h>
+
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-#include "mlir/IR/AsmState.h"
-#include "mlir/IR/Block.h"
-#include "mlir/IR/BuiltinAttributeInterfaces.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/TypeRange.h"
-#include "mlir/IR/ValueRange.h"
-#include "mlir/IR/Visitors.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/ADT/TypeSwitch.h"
-#include "llvm/Support/Error.h"
-#include "llvm/Support/ErrorHandling.h"
-#include <algorithm>
-#include <utility>
 
 namespace mlir::gccjit {
 

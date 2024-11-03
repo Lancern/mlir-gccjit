@@ -13,40 +13,41 @@
 // limitations under the License.
 
 #include "mlir-gccjit/IR/GCCJITOps.h"
-#include "mlir-gccjit/IR/GCCJITDialect.h"
 
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringRef.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/LLVMIR/LLVMTypes.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/BlockSupport.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypeInterfaces.h>
+#include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/DialectImplementation.h>
+#include <mlir/IR/DialectInterface.h>
+#include <mlir/IR/Location.h>
+#include <mlir/IR/OpDefinition.h>
+#include <mlir/IR/OpImplementation.h>
+#include <mlir/IR/Region.h>
+#include <mlir/IR/StorageUniquerSupport.h>
+#include <mlir/IR/TypeRange.h>
+#include <mlir/IR/TypeUtilities.h>
+#include <mlir/IR/Types.h>
+#include <mlir/IR/Value.h>
+#include <mlir/IR/ValueRange.h>
+#include <mlir/Interfaces/ControlFlowInterfaces.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
+#include <mlir/Interfaces/FunctionImplementation.h>
+#include <mlir/Interfaces/InferTypeOpInterface.h>
+#include <mlir/Support/LLVM.h>
+#include <mlir/Support/LogicalResult.h>
+
+#include "mlir-gccjit/IR/GCCJITDialect.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMTypes.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/BlockSupport.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/Diagnostics.h"
-#include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/DialectInterface.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/OpImplementation.h"
-#include "mlir/IR/Region.h"
-#include "mlir/IR/StorageUniquerSupport.h"
-#include "mlir/IR/TypeRange.h"
-#include "mlir/IR/TypeUtilities.h"
-#include "mlir/IR/Types.h"
-#include "mlir/IR/Value.h"
-#include "mlir/IR/ValueRange.h"
-#include "mlir/Interfaces/ControlFlowInterfaces.h"
-#include "mlir/Interfaces/DataLayoutInterfaces.h"
-#include "mlir/Interfaces/FunctionImplementation.h"
-#include "mlir/Interfaces/InferTypeOpInterface.h"
-#include "mlir/Support/LLVM.h"
-#include "mlir/Support/LogicalResult.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;

@@ -1,4 +1,3 @@
-
 // Copyright 2024 Schrodinger ZHU Yifan <i@zhuyi.fan>
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <mlir/InitAllTranslations.h>
+#include <mlir/Support/LLVM.h>
+#include <mlir/Tools/mlir-translate/MlirTranslateMain.h>
+
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
-#include "mlir/InitAllTranslations.h"
-#include "mlir/Support/LLVM.h"
-#include "mlir/Tools/mlir-translate/MlirTranslateMain.h"
+
 using namespace mlir;
 
 int main(int argc, char **argv) {

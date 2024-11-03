@@ -15,7 +15,7 @@
 #ifndef MLIR_GCCJIT_IR_GCCJIT_OPS_ENUMS_H
 #define MLIR_GCCJIT_IR_GCCJIT_OPS_ENUMS_H
 
-#include "mlir/IR/BuiltinAttributes.h"
+#include <mlir/IR/BuiltinAttributes.h>
 
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h.inc"
 

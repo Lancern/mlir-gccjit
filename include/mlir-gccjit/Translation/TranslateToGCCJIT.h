@@ -15,14 +15,15 @@
 #ifndef MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 #define MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 
+#include <llvm/ADT/DenseMap.h>
+#include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/Location.h>
+#include <mlir/IR/MLIRContext.h>
+
+#include <libgccjit.h>
+
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/MLIRContext.h"
-#include "llvm/ADT/DenseMap.h"
-
-#include "libgccjit.h"
 
 namespace mlir::gccjit {
 

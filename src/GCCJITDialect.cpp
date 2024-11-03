@@ -14,30 +14,28 @@
 
 #include "mlir-gccjit/IR/GCCJITDialect.h"
 
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinDialect.h"
+#include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/LLVMIR/LLVMTypes.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinDialect.h>
+#include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/Diagnostics.h>
+#include <mlir/IR/DialectImplementation.h>
+#include <mlir/IR/DialectInterface.h>
+#include <mlir/IR/Location.h>
+#include <mlir/IR/OpDefinition.h>
+#include <mlir/IR/OpImplementation.h>
+#include <mlir/IR/StorageUniquerSupport.h>
+#include <mlir/IR/TypeUtilities.h>
+#include <mlir/Interfaces/DataLayoutInterfaces.h>
+#include <mlir/Interfaces/FunctionImplementation.h>
+#include <mlir/Interfaces/InferTypeOpInterface.h>
+#include <mlir/Support/LLVM.h>
+#include <mlir/Support/LogicalResult.h>
 
 #include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMTypes.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/Diagnostics.h"
-#include "mlir/IR/DialectImplementation.h"
-#include "mlir/IR/DialectInterface.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/OpDefinition.h"
-#include "mlir/IR/OpImplementation.h"
-#include "mlir/IR/StorageUniquerSupport.h"
-#include "mlir/IR/TypeUtilities.h"
-#include "mlir/Interfaces/DataLayoutInterfaces.h"
-#include "mlir/Interfaces/FunctionImplementation.h"
-#include "mlir/Interfaces/InferTypeOpInterface.h"
-#include "mlir/Support/LLVM.h"
-#include "mlir/Support/LogicalResult.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;

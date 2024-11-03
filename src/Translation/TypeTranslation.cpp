@@ -1,7 +1,10 @@
-#include "libgccjit.h"
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
-#include "llvm/ADT/TypeSwitch.h"
+
 #include <optional>
+
+#include <llvm/ADT/TypeSwitch.h>
+
+#include <libgccjit.h>
 
 namespace mlir::gccjit {
 void GCCJITTranslation::convertTypes(

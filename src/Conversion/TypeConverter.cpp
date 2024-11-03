@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include "mlir-gccjit/Conversion/TypeConverter.h"
-#include "libgccjit.h"
+
+#include <libgccjit.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/BuiltinAttributes.h>
+
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/BuiltinAttributes.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;
