@@ -172,17 +172,19 @@ def FieldAttr : GCCJIT_Attr<"Field", "field"> {
     bitfield. The `bitWidth` parameter gives the width of the bitfield.
   }];
 
-  let parameters = (ins "mlir::StringAttr":$name, "mlir::Type":$type,
-                        OptionalParameter<"unsigned">:$bitWidth,
-                        OptionalParameter<"mlir::gccjit::SourceLocAttr">:$loc);
+  let parameters = (ins
+    "mlir::StringAttr":$name, "mlir::Type":$type,
+    OptionalParameter<"std::optional<unsigned>">:$bitWidth,
+    OptionalParameter<"std::optional<mlir::gccjit::SourceLocAttr>">:$loc
+  );
 
   let builders = [
     AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type), [{
-      return get($_ctxt, name, type, 0, mlir::gccjit::SourceLocAttr{});
+      return get($_ctxt, name, type, 0, std::nullopt);
     }]>,
     AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type,
                      "unsigned":$bitWidth), [{
-      return get($_ctxt, name, type, bitWidth, mlir::gccjit::SourceLocAttr{});
+      return get($_ctxt, name, type, bitWidth, std::nullopt);
     }]>,
     AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type,
                      "mlir::gccjit::SourceLocAttr":$loc), [{
@@ -191,7 +193,7 @@ def FieldAttr : GCCJIT_Attr<"Field", "field"> {
   ];
 
   let assemblyFormat = [{
-    `<` $type $name (`:` $bitWidth^)? `>` ($loc^)?
+    `<` $type $name (`:` $bitWidth^)? ($loc^)? `>`
   }];
 }
 
@@ -259,8 +261,8 @@ def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
 
   let parameters = (ins
     "FnAttrEnumAttr":$attr,
-    OptionalParameter<"::mlir::StringAttr">:$strValue,
-    OptionalParameter<"::mlir::DenseI32ArrayAttr">:$intArrayValue
+    OptionalParameter<"std::optional<mlir::StringAttr>">:$strValue,
+    OptionalParameter<"std::optional<mlir::DenseI32ArrayAttr>">:$intArrayValue
   );
 
   let hasCustomAssemblyFormat = 1;

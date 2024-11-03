@@ -217,9 +217,11 @@ class GCCJIT_RecordType<string name, string typeMnemonic>
     : GCCJIT_Type<name, typeMnemonic, [
         DeclareTypeInterfaceMethods<GCCJITRecordTypeInterface>
       ]> {
-  let parameters = (ins "mlir::StringAttr":$name,
-                        "mlir::ArrayAttr":$fields,
-                        OptionalParameter<"mlir::gccjit::SourceLocAttr">:$loc);
+  let parameters = (ins
+    "mlir::StringAttr":$name,
+    "mlir::ArrayAttr":$fields,
+    OptionalParameter<"std::optional<mlir::gccjit::SourceLocAttr>">:$loc
+  );
   let assemblyFormat = [{
     `<` custom<RecordBody>($name, $fields, $loc) `>`
   }];

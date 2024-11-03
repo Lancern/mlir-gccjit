@@ -429,7 +429,7 @@ FlatSymbolRefAttr FuncOp::getAliasee() {
   for (auto attr : getGccjitFnAttrs()) {
     auto fnAttr = cast<FunctionAttr>(attr);
     if (fnAttr.getAttr().getValue() == FnAttrEnum::Alias) {
-      res = FlatSymbolRefAttr::get(getContext(), fnAttr.getStrValue());
+      res = FlatSymbolRefAttr::get(getContext(), fnAttr.getStrValue().value());
       break;
     }
   }

@@ -31,6 +31,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/TypeSwitch.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <optional>
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITDialect.h"
@@ -44,7 +45,8 @@ using namespace mlir::gccjit;
 //===----------------------------------------------------------------------===//
 
 static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
-                                     ArrayAttr &fields, SourceLocAttr &loc) {
+                                     ArrayAttr &fields,
+                                     std::optional<SourceLocAttr> &loc) {
   if (parser.parseAttribute(name))
     return failure();
 
@@ -61,26 +63,33 @@ static LogicalResult parseRecordBody(AsmParser &parser, StringAttr &name,
   };
   if (parser.parseCommaSeparatedList(fieldParser))
     return failure();
+  fields = ArrayAttr::get(parser.getContext(), fieldAttrs);
 
   if (parser.parseRBrace())
     return failure();
 
-  OptionalParseResult parseLocResult = parser.parseOptionalAttribute(loc);
+  SourceLocAttr locAttr;
+  OptionalParseResult parseLocResult = parser.parseOptionalAttribute(locAttr);
   if (parseLocResult.has_value() && parseLocResult.value())
     return failure();
+  if (locAttr)
+    loc.emplace(locAttr);
+  else
+    loc.reset();
 
   return success();
 }
 
 static void printRecordBody(AsmPrinter &printer, StringAttr name,
-                            ArrayAttr fields, SourceLocAttr loc) {
+                            ArrayAttr fields,
+                            std::optional<SourceLocAttr> loc) {
   printer << name << " {";
   llvm::interleaveComma(fields, printer, [&printer](mlir::Attribute elem) {
     printer << cast<FieldAttr>(elem);
   });
   printer << "}";
   if (loc)
-    printer << " " << loc;
+    printer << " " << *loc;
 }
 
 #define GET_TYPEDEF_CLASSES
@@ -488,7 +497,7 @@ verifyRecordFields(llvm::function_ref<InFlightDiagnostic()> emitError,
 
 LogicalResult mlir::gccjit::StructType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
-    ArrayAttr fields, SourceLocAttr loc) {
+    ArrayAttr fields, std::optional<SourceLocAttr> loc) {
   return verifyRecordFields(emitError, fields);
 }
 
@@ -501,12 +510,12 @@ mlir::ArrayAttr mlir::gccjit::StructType::getRecordFields() const {
 }
 
 mlir::gccjit::SourceLocAttr mlir::gccjit::StructType::getRecordLoc() const {
-  return getLoc();
+  return getLoc().value_or(mlir::gccjit::SourceLocAttr{});
 }
 
 LogicalResult mlir::gccjit::UnionType::verify(
     llvm::function_ref<InFlightDiagnostic()> emitError, StringAttr name,
-    ArrayAttr fields, SourceLocAttr loc) {
+    ArrayAttr fields, std::optional<SourceLocAttr> loc) {
   return verifyRecordFields(emitError, fields);
 }
 
@@ -519,7 +528,7 @@ mlir::ArrayAttr mlir::gccjit::UnionType::getRecordFields() const {
 }
 
 mlir::gccjit::SourceLocAttr mlir::gccjit::UnionType::getRecordLoc() const {
-  return getLoc();
+  return getLoc().value_or(mlir::gccjit::SourceLocAttr{});
 }
 
 bool mlir::gccjit::UnionType::isUnion() const { return true; }

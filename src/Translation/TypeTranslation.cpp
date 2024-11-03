@@ -1,6 +1,7 @@
 #include "libgccjit.h"
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include <optional>
 
 namespace mlir::gccjit {
 void GCCJITTranslation::convertTypes(
@@ -86,14 +87,13 @@ convertRecordType(GCCJITTranslation &translation,
   for (Attribute fieldOpaqueAttr : type.getRecordFields()) {
     auto fieldAttr = cast<FieldAttr>(fieldOpaqueAttr);
 
-    int fieldBitWidth = fieldAttr.getBitWidth();
+    int fieldBitWidth = fieldAttr.getBitWidth().value_or(0);
     std::string fieldName = fieldAttr.getName().str();
     gcc_jit_type *fieldType = translation.convertType(fieldAttr.getType());
 
-    SourceLocAttr fieldLoc = fieldAttr.getLoc();
     gcc_jit_location *loc = nullptr;
-    if (fieldLoc)
-      loc = translation.convertLocation(fieldLoc);
+    if (auto fieldLoc = fieldAttr.getLoc())
+      loc = translation.convertLocation(*fieldLoc);
 
     gcc_jit_field *field =
         fieldAttr.getBitWidth()

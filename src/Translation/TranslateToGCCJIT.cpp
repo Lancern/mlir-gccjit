@@ -228,8 +228,9 @@ static void processFunctionAttrs(gccjit::FuncOp func,
     auto fnAttr = cast<FunctionAttr>(attr);
     switch (fnAttr.getAttr().getValue()) {
     case FnAttrEnum::Alias:
-      gcc_jit_function_add_string_attribute(handle, GCC_JIT_FN_ATTRIBUTE_ALIAS,
-                                            fnAttr.getStrValue().str().c_str());
+      gcc_jit_function_add_string_attribute(
+          handle, GCC_JIT_FN_ATTRIBUTE_ALIAS,
+          fnAttr.getStrValue().value().str().c_str());
       break;
     case FnAttrEnum::AlwaysInline:
       gcc_jit_function_add_attribute(handle,
@@ -242,16 +243,17 @@ static void processFunctionAttrs(gccjit::FuncOp func,
       gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_NOINLINE);
       break;
     case FnAttrEnum::Target:
-      gcc_jit_function_add_string_attribute(handle, GCC_JIT_FN_ATTRIBUTE_TARGET,
-                                            fnAttr.getStrValue().str().c_str());
+      gcc_jit_function_add_string_attribute(
+          handle, GCC_JIT_FN_ATTRIBUTE_TARGET,
+          fnAttr.getStrValue().value().str().c_str());
       break;
     case FnAttrEnum::Used:
       gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_USED);
       break;
     case FnAttrEnum::Visibility:
-      gcc_jit_function_add_string_attribute(handle,
-                                            GCC_JIT_FN_ATTRIBUTE_VISIBILITY,
-                                            fnAttr.getStrValue().str().c_str());
+      gcc_jit_function_add_string_attribute(
+          handle, GCC_JIT_FN_ATTRIBUTE_VISIBILITY,
+          fnAttr.getStrValue().value().str().c_str());
       break;
     case FnAttrEnum::Cold:
       gcc_jit_function_add_attribute(handle, GCC_JIT_FN_ATTRIBUTE_COLD);
@@ -273,8 +275,8 @@ static void processFunctionAttrs(gccjit::FuncOp func,
       gcc_jit_function_add_integer_array_attribute(
           handle, GCC_JIT_FN_ATTRIBUTE_NONNULL,
           reinterpret_cast<const int *>(
-              fnAttr.getIntArrayValue().asArrayRef().data()),
-          fnAttr.getIntArrayValue().size());
+              fnAttr.getIntArrayValue().value().asArrayRef().data()),
+          fnAttr.getIntArrayValue().value().size());
       break;
     }
   }

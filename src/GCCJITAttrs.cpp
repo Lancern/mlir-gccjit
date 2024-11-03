@@ -261,10 +261,10 @@ void FunctionAttr::print(AsmPrinter &printer) const {
   printer << "<" << getAttr().getValue();
   if (isStringFnAttr(getAttr().getValue())) {
     printer << ", ";
-    printer.printAttribute(getStrValue());
+    printer.printAttribute(getStrValue().value());
   } else if (isIntArrayFnAttr(getAttr().getValue())) {
     printer << ", ";
-    printer.printAttribute(getIntArrayValue());
+    printer.printAttribute(getIntArrayValue().value());
   }
   printer << ">";
 }
