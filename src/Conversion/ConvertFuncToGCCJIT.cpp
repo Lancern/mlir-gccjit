@@ -35,9 +35,10 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/IR/Types.h"
 #include "mlir/IR/Value.h"
+#include "mlir/IR/ValueRange.h"
+#include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Support/LLVM.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include <llvm-20/llvm/ADT/SmallVector.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -47,7 +48,7 @@ namespace {
 class GCCJITFunctionRewriter {
   func::FuncOp op;
   GCCJITTypeConverter &typeConverter;
-  llvm::DenseMap<BlockArgument, Value> argMap;
+  llvm::DenseMap<std::pair<Block *, size_t>, Value> argMap;
   mlir::IRRewriter &rewriter;
 
   FnKindAttr getFnKindAttr() {
@@ -64,9 +65,7 @@ class GCCJITFunctionRewriter {
     }
   }
 
-  void
-  convertEntryBlockArguments(Block *blk,
-                             llvm::DenseMap<BlockArgument, Value> &argMap) {
+  void convertEntryBlockArguments(Block *blk) {
     OpBuilder::InsertionGuard guard(rewriter);
     rewriter.setInsertionPointToStart(blk);
     if (blk->getNumArguments() == 0)
@@ -76,25 +75,16 @@ class GCCJITFunctionRewriter {
       auto originalTy = blkArg.getType();
       auto convertedTy = typeConverter.convertType(originalTy);
       auto varTy = LValueType::get(op.getContext(), convertedTy);
-      argMap[blkArg] = blkArg;
+      argMap[{blkArg.getParentBlock(), blkArg.getArgNumber()}] = blkArg;
       blkArg.setType(varTy);
       auto loaded =
           rewriter.create<AsRValueOp>(blkArg.getLoc(), convertedTy, blkArg);
-      Value coerced;
-      if (convertedTy != originalTy) {
-        coerced = rewriter
-                      .create<UnrealizedConversionCastOp>(
-                          blkArg.getLoc(), originalTy, loaded.getResult())
-                      ->getResult(0);
-      } else {
-        coerced = loaded;
-      }
+      Value coerced = coerceType(loaded.getResult(), originalTy);
       rewriter.replaceAllUsesExcept(blkArg, coerced, loaded);
     }
   }
 
-  void convertBlock(Block *blk, Block *entry,
-                    llvm::DenseMap<BlockArgument, Value> &argMap) {
+  void convertBlock(Block *blk, Block *entry) {
     OpBuilder::InsertionGuard guard(rewriter);
     if (!blk->getNumArguments() || blk->isEntryBlock())
       return;
@@ -106,21 +96,71 @@ class GCCJITFunctionRewriter {
       auto varTy = LValueType::get(op.getContext(), convertedTy);
       auto var = rewriter.create<LocalOp>(arg.getLoc(), varTy, nullptr, nullptr,
                                           nullptr);
-      argMap[arg] = var;
+      argMap[{arg.getParentBlock(), arg.getArgNumber()}] = var;
       rewriter.setInsertionPointToStart(blk);
       auto loaded = rewriter.create<AsRValueOp>(arg.getLoc(), convertedTy, var);
-      Value coerced;
-      if (convertedTy != originalTy) {
-        coerced = rewriter
-                      .create<UnrealizedConversionCastOp>(
-                          arg.getLoc(), originalTy, loaded.getResult())
-                      ->getResult(0);
-      } else {
-        coerced = loaded;
-      }
+      Value coerced = coerceType(loaded.getResult(), originalTy);
       rewriter.replaceAllUsesExcept(arg, coerced, loaded);
     }
     blk->eraseArguments([](BlockArgument arg) { return true; });
+  }
+
+  Value coerceType(Value value, Type targetTy) {
+    if (value.getType() == targetTy)
+      return value;
+    return rewriter
+        .create<UnrealizedConversionCastOp>(value.getLoc(), targetTy, value)
+        ->getResult(0);
+  }
+
+  Value coerceType(Value value) {
+    auto targetTy = typeConverter.convertType(value.getType());
+    return coerceType(value, targetTy);
+  }
+
+  Block *createIntermediateBlock(Block *blk, Block *dest, ValueRange operands,
+                                 Location loc) {
+    if (operands.empty())
+      return dest;
+
+    {
+      OpBuilder::InsertionGuard guard(rewriter);
+      auto *region = blk->getParent();
+      auto *intermediate = rewriter.createBlock(region, region->end());
+      rewriter.setInsertionPointToStart(intermediate);
+      llvm::SmallVector<Value> coerced;
+      std::transform(operands.begin(), operands.end(),
+                     std::back_inserter(coerced),
+                     [&](Value val) { return coerceType(val); });
+      for (auto [idx, val] : llvm::enumerate(coerced)) {
+        auto var = argMap[{dest, idx}];
+        rewriter.create<AssignOp>(loc, val, var);
+      }
+      rewriter.create<gccjit::JumpOp>(loc, dest);
+      return intermediate;
+    }
+  }
+
+  void translateBr(cf::BranchOp br) {
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(br);
+    auto *intermediate = createIntermediateBlock(
+        br->getBlock(), br.getDest(), br.getDestOperands(), br.getLoc());
+    rewriter.replaceOpWithNewOp<gccjit::JumpOp>(br, intermediate);
+  }
+
+  void translateCondBr(cf::CondBranchOp br) {
+    OpBuilder::InsertionGuard guard(rewriter);
+    rewriter.setInsertionPoint(br);
+    Value conditon = coerceType(br.getCondition());
+    auto *trueBlock =
+        createIntermediateBlock(br->getBlock(), br.getTrueDest(),
+                                br.getTrueDestOperands(), br.getLoc());
+    auto *falseBlock =
+        createIntermediateBlock(br->getBlock(), br.getFalseDest(),
+                                br.getFalseDestOperands(), br.getLoc());
+    rewriter.replaceOpWithNewOp<gccjit::ConditionalOp>(br, conditon, trueBlock,
+                                                       falseBlock);
   }
 
 public:
@@ -142,13 +182,22 @@ public:
       rewriter.inlineRegionBefore(op.getFunctionBody(), funcOp.getBody(),
                                   funcOp.getBody().end());
       if (funcOp.getBody().getNumArguments() != 0)
-        convertEntryBlockArguments(&funcOp.getBody().front(), argMap);
+        convertEntryBlockArguments(&funcOp.getBody().front());
 
       for (auto &blk : funcOp.getBody()) {
         if (blk.isEntryBlock())
           continue;
-        convertBlock(&blk, &funcOp.getBody().front(), argMap);
+        convertBlock(&blk, &funcOp.getBody().front());
       }
+
+      funcOp.walk([&](Operation *op) {
+        if (auto br = dyn_cast<cf::BranchOp>(op))
+          translateBr(br);
+        else if (auto br = dyn_cast<cf::CondBranchOp>(op))
+          translateCondBr(br);
+        else if (auto switchOp = dyn_cast<cf::SwitchOp>(op))
+          llvm_unreachable("TODO: switch not supported");
+      });
     }
 
     rewriter.eraseOp(op);

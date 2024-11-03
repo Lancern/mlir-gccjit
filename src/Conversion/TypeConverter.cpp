@@ -148,10 +148,10 @@ GCCJITTypeConverter::convertFunctionTypeAsPtr(mlir::FunctionType type,
 
 gccjit::StructType
 GCCJITTypeConverter::getMemrefDescriptorType(mlir::MemRefType type) const {
-  auto name =
-      Twine("__memref_")
-          .concat(Twine(reinterpret_cast<uintptr_t>(type.getAsOpaquePointer())))
-          .str();
+  std::string name;
+  llvm::raw_string_ostream os(name);
+  type.print(os);
+  os.flush();
   auto nameAttr = StringAttr::get(type.getContext(), name);
   auto elementType = convertType(type.getElementType());
   auto elementPtrType = PointerType::get(type.getContext(), elementType);

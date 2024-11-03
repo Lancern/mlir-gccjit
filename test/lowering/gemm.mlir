@@ -1,4 +1,9 @@
+// RUN: %gccjit-opt %s -lower-affine -convert-scf-to-cf -convert-func-to-gccjit | %filecheck %s
 module {
+  // CHECK-NOT: func.func
+  // CHECK-NOT: func.return
+  // CHECK-NOT: cf.cond_br
+  // CHECK-NOT: cf.br
   func.func @gemm(%A: memref<100x100xf32>, %B: memref<100x100xf32>, %C: memref<100x100xf32>, %alpha: f32, %beta: f32) {
     affine.for %i = 0 to 100 {
       affine.for %j = 0 to 100 {
@@ -30,7 +35,7 @@ module {
         // Store the final result back to matrix C
         affine.store %final_val, %C[%i, %j] : memref<100x100xf32>
       }
-    } { slap.extract }
+    }
     return
   }
 }
