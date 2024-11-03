@@ -15,8 +15,9 @@
 #ifndef MLIR_GCCJIT_CONVERSION_CONVERTIONS_H
 #define MLIR_GCCJIT_CONVERSION_CONVERTIONS_H
 
+#include <mlir/IR/MLIRContext.h>
+
 #include "mlir-gccjit/Conversion/TypeConverter.h"
-#include "mlir/IR/MLIRContext.h"
 
 namespace mlir::gccjit {
 void populateFuncToGCCJITPatterns(MLIRContext *context,
