@@ -61,9 +61,7 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
       SymbolNameAttr:$sym_name,
       FnKind:$fn_kind,
       TypeAttrOf<GCCJIT_FuncType>:$function_type,
-      ArrayAttr:$gccjit_fn_attrs,
-      OptionalAttr<DictArrayAttr>:$arg_attrs,
-      OptionalAttr<DictArrayAttr>:$res_attrs
+      ArrayAttr:$gccjit_fn_attrs
   );
   let regions = (region AnyRegion:$body);
   let hasVerifier = 1;

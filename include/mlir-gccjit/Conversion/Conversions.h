@@ -12,27 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef MLIR_GCCJIT_PASSES_H
-#define MLIR_GCCJIT_PASSES_H
+#ifndef MLIR_GCCJIT_CONVERSION_CONVERTIONS_H
+#define MLIR_GCCJIT_CONVERSION_CONVERTIONS_H
 
-#include <mlir/Dialect/ControlFlow/IR/ControlFlow.h>
-#include <mlir/Dialect/Func/IR/FuncOps.h>
-#include <mlir/IR/BuiltinDialect.h>
-#include <mlir/IR/BuiltinOps.h>
-#include <mlir/Pass/Pass.h>
+#include <mlir/IR/MLIRContext.h>
 
-#include "mlir-gccjit/IR/GCCJITDialect.h"
+#include "mlir-gccjit/Conversion/TypeConverter.h"
 
 namespace mlir::gccjit {
-
-std::unique_ptr<Pass> createConvertCFToGCCJITPass();
-std::unique_ptr<Pass> createConvertFuncToGCCJITPass();
-
-#define GEN_PASS_CLASSES
-#define GEN_PASS_REGISTRATION
-#define GEN_PASS_DECL
-#include "mlir-gccjit/Passes.h.inc"
-
+void populateFuncToGCCJITPatterns(MLIRContext *context,
+                                  GCCJITTypeConverter &typeConverter,
+                                  RewritePatternSet &patterns,
+                                  SymbolTable &symbolTable);
 } // namespace mlir::gccjit
 
-#endif // MLIR_GCCJIT_PASSES_H
+#endif

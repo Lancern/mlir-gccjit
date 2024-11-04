@@ -17,6 +17,13 @@
 
 include "mlir/Pass/PassBase.td"
 
-// TODO: Add passes here.
+def ConvertFuncToGCCJIT : Pass<"convert-func-to-gccjit", "::mlir::ModuleOp"> {
+  let summary = "Convert Functions and control flows to GCCJIT Dialect";
+  let description = [{
+    This pass converts function operations and control flow operations to GCCJIT dialect.
+  }];
+  let constructor = "::mlir::gccjit::createConvertFuncToGCCJITPass()";
+  let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::func::FuncDialect", "::mlir::BuiltinDialect", "::mlir::cf::ControlFlowDialect"];
+}
 
 #endif // MLIR_GCCJIT_PASSES
