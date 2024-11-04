@@ -12,6 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <mlir/Dialect/ControlFlow/IR/ControlFlow.h>
+#include <mlir/Dialect/ControlFlow/IR/ControlFlowOps.h>
+#include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/IR/Attributes.h>
+#include <mlir/IR/Block.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinOps.h>
+#include <mlir/IR/MLIRContext.h>
+#include <mlir/IR/Operation.h>
+#include <mlir/IR/PatternMatch.h>
+#include <mlir/IR/SymbolTable.h>
+#include <mlir/IR/Types.h>
+#include <mlir/IR/Value.h>
+#include <mlir/IR/ValueRange.h>
+#include <mlir/Interfaces/ControlFlowInterfaces.h>
+#include <mlir/Support/LLVM.h>
+#include <mlir/Transforms/DialectConversion.h>
+
 #include "mlir-gccjit/Conversion/Conversions.h"
 #include "mlir-gccjit/Conversion/TypeConverter.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
@@ -19,26 +39,6 @@
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir-gccjit/Passes.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
-#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/IR/Attributes.h"
-#include "mlir/IR/Block.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/IR/Operation.h"
-#include "mlir/IR/PatternMatch.h"
-#include "mlir/IR/SymbolTable.h"
-#include "mlir/IR/Types.h"
-#include "mlir/IR/Value.h"
-#include "mlir/IR/ValueRange.h"
-#include "mlir/Interfaces/ControlFlowInterfaces.h"
-#include "mlir/Support/LLVM.h"
-#include "mlir/Transforms/DialectConversion.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;

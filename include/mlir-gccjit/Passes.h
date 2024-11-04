@@ -15,8 +15,10 @@
 #ifndef MLIR_GCCJIT_PASSES_H
 #define MLIR_GCCJIT_PASSES_H
 
+#include <mlir/Dialect/Arith/IR/Arith.h>
 #include <mlir/Dialect/ControlFlow/IR/ControlFlow.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
 #include <mlir/IR/BuiltinDialect.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/Pass/Pass.h>
@@ -26,6 +28,8 @@
 namespace mlir::gccjit {
 
 std::unique_ptr<Pass> createConvertFuncToGCCJITPass();
+std::unique_ptr<Pass> createConvertArithToGCCJITPass();
+std::unique_ptr<Pass> createConvertMemrefToGCCJITPass();
 
 #define GEN_PASS_CLASSES
 #define GEN_PASS_REGISTRATION

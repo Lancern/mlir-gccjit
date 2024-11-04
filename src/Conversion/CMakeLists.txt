@@ -3,6 +3,8 @@ get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
 add_mlir_dialect_library(MLIRGCCJITConversion
     TypeConverter.cpp
     ConvertFuncToGCCJIT.cpp
+    ConvertArithToGCCJIT.cpp
+    ConvertMemrefToGCCJIT.cpp
 
     DEPENDS
     MLIRGCCJIT

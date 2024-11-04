@@ -26,4 +26,22 @@ def ConvertFuncToGCCJIT : Pass<"convert-func-to-gccjit", "::mlir::ModuleOp"> {
   let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::func::FuncDialect", "::mlir::BuiltinDialect", "::mlir::cf::ControlFlowDialect"];
 }
 
+def ConvertArithToGCCJIT : Pass<"convert-arith-to-gccjit", "::mlir::ModuleOp"> {
+  let summary = "Convert Arithmetic Operations to GCCJIT Dialect";
+  let description = [{
+    `-convert-arith-to-gccjit` converts arithmetic operations to GCCJIT dialect.
+  }];
+  let constructor = "::mlir::gccjit::createConvertArithToGCCJITPass()";
+let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::arith::ArithDialect"];
+}
+
+def ConvertMemrefToGCCJIT : Pass<"convert-memref-to-gccjit", "::mlir::ModuleOp"> {
+  let summary = "Convert Memref Operations to GCCJIT Dialect";
+  let description = [{
+    `-convert-memref-to-gccjit` converts memref operations to GCCJIT dialect.
+  }];
+  let constructor = "::mlir::gccjit::createConvertMemrefToGCCJITPass()";
+  let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::memref::MemRefDialect"];
+}
+
 #endif // MLIR_GCCJIT_PASSES
