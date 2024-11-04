@@ -38,13 +38,15 @@
 #include "mlir/IR/ValueRange.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 #include "mlir/Support/LLVM.h"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
 #include "mlir/Transforms/DialectConversion.h"
+#pragma GCC diagnostic pop
 
 using namespace mlir;
 using namespace mlir::gccjit;
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Woverloaded-virtual"
 namespace {
 
 class GCCJITFunctionRewriter {
@@ -370,7 +372,6 @@ public:
   }
 };
 } // namespace
-#pragma GCC diagnostic pop
 
 void mlir::gccjit::populateFuncToGCCJITPatterns(
     MLIRContext *context, GCCJITTypeConverter &typeConverter,
