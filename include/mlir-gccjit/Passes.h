@@ -25,7 +25,6 @@
 
 namespace mlir::gccjit {
 
-std::unique_ptr<Pass> createConvertCFToGCCJITPass();
 std::unique_ptr<Pass> createConvertFuncToGCCJITPass();
 
 #define GEN_PASS_CLASSES
