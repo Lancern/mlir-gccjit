@@ -19,4 +19,7 @@ add_mlir_dialect_library(MLIRGCCJITConversion
 
     LINK_COMPONENTS
     Core
+
+    COMPILE_OPTIONS
+    -Wno-overloaded-virtual
 )
