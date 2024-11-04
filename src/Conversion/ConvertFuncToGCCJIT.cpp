@@ -63,6 +63,7 @@ class GCCJITFunctionRewriter {
     case SymbolTable::Visibility::Nested:
       return FnKindAttr::get(op.getContext(), FnKind::Imported);
     }
+    llvm_unreachable("unreachable");
   }
 
   void convertEntryBlockArguments(Block *blk) {
@@ -240,23 +241,60 @@ void ConvertFuncToGCCJITPass::runOnOperation() {
     signalPassFailure();
 }
 
-template <typename T>
-class GCCJITLoweringPattern : public mlir::OpConversionPattern<T> {
+template <typename SourceOp>
+class GCCJITLoweringPattern : public ConversionPattern {
 protected:
   const SymbolTable &symbolTable;
-
-public:
   const GCCJITTypeConverter *getTypeConverter() const {
     return static_cast<const GCCJITTypeConverter *>(this->typeConverter);
   }
 
-  template <typename... Args>
+public:
+  using OpAdaptor = typename SourceOp::Adaptor;
   GCCJITLoweringPattern(const SymbolTable &symbolTable,
-                        const GCCJITTypeConverter &typeConverter,
-                        Args &&...args)
-      : mlir::OpConversionPattern<T>(typeConverter,
-                                     std::forward<Args>(args)...),
+                        const TypeConverter &typeConverter,
+                        MLIRContext *context, PatternBenefit benefit = 1)
+      : ConversionPattern(typeConverter, SourceOp::getOperationName(), benefit,
+                          context),
         symbolTable(symbolTable) {}
+
+  /// Wrappers around the ConversionPattern methods that pass the derived op
+  /// type.
+  LogicalResult match(Operation *op) const final {
+    return match(cast<SourceOp>(op));
+  }
+  void rewrite(Operation *op, ArrayRef<Value> operands,
+               ConversionPatternRewriter &rewriter) const final {
+    auto sourceOp = cast<SourceOp>(op);
+    rewrite(sourceOp, OpAdaptor(operands, sourceOp), rewriter);
+  }
+  LogicalResult
+  matchAndRewrite(Operation *op, ArrayRef<Value> operands,
+                  ConversionPatternRewriter &rewriter) const final {
+    auto sourceOp = cast<SourceOp>(op);
+    return matchAndRewrite(sourceOp, OpAdaptor(operands, sourceOp), rewriter);
+  }
+
+  /// Rewrite and Match methods that operate on the SourceOp type. These must be
+  /// overridden by the derived pattern class.
+  virtual LogicalResult match(SourceOp op) const {
+    llvm_unreachable("must override match or matchAndRewrite");
+  }
+  virtual void rewrite(SourceOp op, OpAdaptor adaptor,
+                       ConversionPatternRewriter &rewriter) const {
+    llvm_unreachable("must override matchAndRewrite or a rewrite method");
+  }
+  virtual LogicalResult
+  matchAndRewrite(SourceOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const {
+    if (failed(match(op)))
+      return failure();
+    rewrite(op, adaptor, rewriter);
+    return success();
+  }
+
+private:
+  using ConversionPattern::matchAndRewrite;
 };
 
 NewStructOp packValues(mlir::Location loc, mlir::ValueRange values,

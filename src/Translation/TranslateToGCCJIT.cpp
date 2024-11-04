@@ -90,7 +90,6 @@ public:
 
 private:
   Expr visitExpr(Value value, bool toplevel = false);
-  void visitExprs(ValueRange values, llvm::SmallVectorImpl<Expr> &result);
   void visitExprAsRValue(ValueRange operands,
                          llvm::SmallVectorImpl<gcc_jit_rvalue *> &result);
   gcc_jit_rvalue *visitExprWithoutCache(ConstantOp op);
@@ -592,12 +591,6 @@ void RegionVisitor::visitConditionalOp(gcc_jit_block *blk, ConditionalOp op) {
   auto *loc = getTranslator().getLocation(op.getLoc());
   gcc_jit_block_end_with_conditional(blk, loc, condition, trueBlock,
                                      falseBlock);
-}
-
-void RegionVisitor::visitExprs(ValueRange values,
-                               llvm::SmallVectorImpl<Expr> &result) {
-  for (auto value : values)
-    result.push_back(visitExpr(value));
 }
 
 void RegionVisitor::visitExprAsRValue(

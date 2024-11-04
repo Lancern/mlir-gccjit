@@ -229,7 +229,7 @@ class GCCJIT_RecordType<string name, string typeMnemonic>
   let builders = [
     TypeBuilder<(ins "mlir::StringAttr":$name,
                      "mlir::ArrayAttr":$fields), [{
-      return get($_ctxt, name, fields, mlir::gccjit::SourceLocAttr{});
+      return get($_ctxt, name, fields, std::nullopt);
     }]>,
     TypeBuilder<(ins "llvm::StringRef":$name,
                      "llvm::ArrayRef<mlir::gccjit::FieldAttr>":$fields), [{
