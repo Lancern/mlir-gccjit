@@ -20,6 +20,7 @@
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
+#include <mlir/IR/BuiltinTypes.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -82,8 +83,17 @@ GCCJITTypeConverter::convertIntegerType(mlir::IntegerType type) const {
 gccjit::IntAttr
 GCCJITTypeConverter::convertIntegerAttr(mlir::IntegerAttr attr) const {
   auto value = attr.getValue();
-  auto type = convertIntegerType(cast<IntegerType>(attr.getType()));
-  return IntAttr::get(attr.getContext(), type, value);
+  if (auto intType = dyn_cast<IntegerType>(attr.getType())) {
+    auto type = convertIntegerType(intType);
+    return IntAttr::get(attr.getContext(), type, value);
+  }
+
+  if (auto indexType = dyn_cast<IndexType>(attr.getType())) {
+    auto type = convertIndexType(indexType);
+    return IntAttr::get(attr.getContext(), type, value);
+  }
+
+  return {};
 }
 
 gccjit::FloatType
@@ -215,4 +225,67 @@ Type GCCJITTypeConverter::convertAndPackTypesIfNonSingleton(
   auto nameAttr = StringAttr::get(func.getContext(), name);
   auto fieldsAttr = ArrayAttr::get(func.getContext(), fields);
   return StructType::get(func.getContext(), nameAttr, fieldsAttr);
+}
+
+bool GCCJITTypeConverter::isSigned(gccjit::IntType type) const {
+  switch (type.getKind()) {
+  case GCC_JIT_TYPE_UNSIGNED_INT:
+  case GCC_JIT_TYPE_UNSIGNED_LONG:
+  case GCC_JIT_TYPE_UNSIGNED_LONG_LONG:
+  case GCC_JIT_TYPE_UINT8_T:
+  case GCC_JIT_TYPE_UINT16_T:
+  case GCC_JIT_TYPE_UINT32_T:
+  case GCC_JIT_TYPE_UINT64_T:
+  case GCC_JIT_TYPE_UINT128_T:
+    return false;
+  default:
+    return true;
+  }
+}
+
+gccjit::IntType GCCJITTypeConverter::makeSigned(gccjit::IntType type) const {
+  switch (type.getKind()) {
+  case GCC_JIT_TYPE_UNSIGNED_INT:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_INT);
+  case GCC_JIT_TYPE_UNSIGNED_LONG:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_LONG);
+  case GCC_JIT_TYPE_UNSIGNED_LONG_LONG:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_LONG_LONG);
+  case GCC_JIT_TYPE_UINT8_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_INT8_T);
+  case GCC_JIT_TYPE_UINT16_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_INT16_T);
+  case GCC_JIT_TYPE_UINT32_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_INT32_T);
+  case GCC_JIT_TYPE_UINT64_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_INT64_T);
+  case GCC_JIT_TYPE_UINT128_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_INT128_T);
+  default:
+    return type;
+  }
+}
+
+// the counterpart of makeSigned
+gccjit::IntType GCCJITTypeConverter::makeUnsigned(gccjit::IntType type) const {
+  switch (type.getKind()) {
+  case GCC_JIT_TYPE_INT:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UNSIGNED_INT);
+  case GCC_JIT_TYPE_LONG:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UNSIGNED_LONG);
+  case GCC_JIT_TYPE_LONG_LONG:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UNSIGNED_LONG_LONG);
+  case GCC_JIT_TYPE_INT8_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UINT8_T);
+  case GCC_JIT_TYPE_INT16_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UINT16_T);
+  case GCC_JIT_TYPE_INT32_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UINT32_T);
+  case GCC_JIT_TYPE_INT64_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UINT64_T);
+  case GCC_JIT_TYPE_INT128_T:
+    return IntType::get(type.getContext(), GCC_JIT_TYPE_UINT128_T);
+  default:
+    return type;
+  }
 }

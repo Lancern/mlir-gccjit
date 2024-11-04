@@ -32,6 +32,9 @@ public:
   ~GCCJITTypeConverter();
   // integral types
   gccjit::IntType convertIndexType(mlir::IndexType type) const;
+  gccjit::IntType makeSigned(gccjit::IntType type) const;
+  gccjit::IntType makeUnsigned(gccjit::IntType type) const;
+  bool isSigned(gccjit::IntType type) const;
   gccjit::IntType convertIntegerType(mlir::IntegerType type) const;
   gccjit::IntAttr convertIntegerAttr(mlir::IntegerAttr attr) const;
 

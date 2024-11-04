@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <mlir/Dialect/Func/IR/FuncOps.h>
+#include <mlir/Dialect/MemRef/IR/MemRef.h>
 
 #include "mlir-gccjit/Conversion/Conversions.h"
 #include "mlir-gccjit/Conversion/TypeConverter.h"
 #include "mlir-gccjit/Passes.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;
