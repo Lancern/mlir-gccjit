@@ -177,7 +177,7 @@ GCCJITTypeConverter::getMemrefDescriptorType(mlir::MemRefType type) const {
        llvm::enumerate(ArrayRef<Type>{elementPtrType, elementPtrType, indexType,
                                       dimOrStrideType, dimOrStrideType})) {
     auto nameAttr = StringAttr::get(type.getContext(), names[idx]);
-    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
+    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field));
   }
   auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);
   return StructType::get(type.getContext(), nameAttr, fieldsAttr);
@@ -199,7 +199,7 @@ gccjit::StructType GCCJITTypeConverter::getUnrankedMemrefDescriptorType(
        llvm::enumerate(ArrayRef<Type>{indexType, opaquePtrType})) {
     auto name = Twine("__field_").concat(Twine(idx)).str();
     auto nameAttr = StringAttr::get(type.getContext(), name);
-    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field, 0));
+    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, field));
   }
   auto fieldsAttr = ArrayAttr::get(type.getContext(), fields);
   return StructType::get(type.getContext(), nameAttr, fieldsAttr);
@@ -220,7 +220,7 @@ Type GCCJITTypeConverter::convertAndPackTypesIfNonSingleton(
   for (auto [idx, type] : llvm::enumerate(types)) {
     auto name = Twine("__field_").concat(Twine(idx)).str();
     auto nameAttr = StringAttr::get(func.getContext(), name);
-    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, type, 0));
+    fields.push_back(FieldAttr::get(type.getContext(), nameAttr, type));
   }
   auto nameAttr = StringAttr::get(func.getContext(), name);
   auto fieldsAttr = ArrayAttr::get(func.getContext(), fields);

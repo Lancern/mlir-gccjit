@@ -1,5 +1,16 @@
-// RUN: %gccjit-opt %s -lower-affine -convert-scf-to-cf  -convert-arith-to-gccjit -convert-func-to-gccjit -reconcile-unrealized-casts | %filecheck %s
-module {
+// RUN: %gccjit-opt %s \
+// RUN:     -lower-affine \
+// RUN:     -convert-scf-to-cf \
+// RUN:     -convert-arith-to-gccjit \
+// RUN:     -convert-memref-to-gccjit \
+// RUN:     -convert-func-to-gccjit \
+// RUN:     -reconcile-unrealized-casts -mlir-print-debuginfo -o %t.mlir 
+// RUN: %filecheck --input-file=%t.mlir %s
+// RUN: %gccjit-translate %t.mlir -mlir-to-gccjit-gimple | %filecheck %s --check-prefix=CHECK-GIMPLE
+module @test attributes {
+      gccjit.opt_level = #gccjit.opt_level<O3>
+}
+{
   // CHECK-NOT: func.func
   // CHECK-NOT: func.return
   // CHECK-NOT: cf.cond_br
@@ -15,11 +26,15 @@ module {
         %acc0 = arith.constant 0.0 : f32
         %sum = affine.for %k = 0 to 100 iter_args(%acc = %acc0) -> f32 {
           // Load values from A and B
+          // CHECK-GIMPLE: %{{[0-9]+}} = %{{[0-9\.a-z]+}}[(%{{[0-9]+}} * (size_t)100 + %{{[0-9]+}})]
           %a_val = affine.load %A[%i, %k] : memref<100x100xf32>
+          // CHECK-GIMPLE: %{{[0-9]+}} = %{{[0-9\.a-z]+}}[(%{{[0-9]+}} * (size_t)100 + %{{[0-9]+}})]
           %b_val = affine.load %B[%k, %j] : memref<100x100xf32>
           
           // Multiply and accumulate
+          // CHECK-GIMPLE: %[[V:[0-9]+]] = %{{[0-9]+}} * %{{[0-9]+}}
           %prod = arith.mulf %a_val, %b_val : f32
+          // CHECK-GIMPLE: %{{[0-9]+}} = %{{[0-9]+}} + %[[V]]
           %new_acc = arith.addf %acc, %prod : f32
           
           // Yield the new accumulated value
@@ -33,6 +48,7 @@ module {
         %final_val = arith.addf %c_scaled, %result : f32
         
         // Store the final result back to matrix C
+        // CHECK-GIMPLE: %{{[0-9\.a-z]+}}[(%{{[0-9]+}} * (size_t)100 + %{{[0-9]+}})] = %{{[0-9]+}}
         affine.store %final_val, %C[%i, %j] : memref<100x100xf32>
       }
     }
