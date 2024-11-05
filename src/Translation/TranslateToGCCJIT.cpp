@@ -208,6 +208,18 @@ void GCCJITTranslation::populateGCCJITModuleOptions() {
       if (auto boolAttr = dyn_cast<BoolAttr>(attr.getValue()))
         gcc_jit_context_set_bool_option(ctxt, GCC_JIT_BOOL_OPTION_DEBUGINFO,
                                         boolAttr.getValue());
+    } else if (attr.getName() == "gccjit.cmdline_options") {
+      if (auto arrayAttr = dyn_cast<ArrayAttr>(attr.getValue()))
+        for (auto &element : arrayAttr.getValue())
+          if (auto strAttr = dyn_cast<StringAttr>(element))
+            gcc_jit_context_add_command_line_option(
+                ctxt, strAttr.getValue().str().c_str());
+    } else if (attr.getName() == "gccjit.driver_options") {
+      if (auto arrayAttr = dyn_cast<ArrayAttr>(attr.getValue()))
+        for (auto &element : arrayAttr.getValue())
+          if (auto strAttr = dyn_cast<StringAttr>(element))
+            gcc_jit_context_add_driver_option(ctxt,
+                                              strAttr.getValue().str().c_str());
     }
   }
 }

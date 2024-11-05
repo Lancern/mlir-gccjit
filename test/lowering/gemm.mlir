@@ -14,7 +14,7 @@
 // CHECK-OUTPUT: Verification passed! The matrices match.
 module @test attributes {
       gccjit.opt_level = #gccjit.opt_level<O3>,
-      gccjit.debug_info = true
+      gccjit.debug_info = false
 }
 {
   // CHECK-NOT: func.func
