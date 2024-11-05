@@ -7,7 +7,10 @@
 // RUN:     -reconcile-unrealized-casts -mlir-print-debuginfo -o %t.mlir 
 // RUN: %filecheck --input-file=%t.mlir %s
 // RUN: %gccjit-translate %t.mlir -mlir-to-gccjit-gimple | %filecheck %s --check-prefix=CHECK-GIMPLE
-module {
+module @test attributes {
+      gccjit.opt_level = #gccjit.opt_level<O3>
+}
+{
   // CHECK-NOT: func.func
   // CHECK-NOT: func.return
   // CHECK-NOT: cf.cond_br
