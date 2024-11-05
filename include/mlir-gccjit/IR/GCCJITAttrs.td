@@ -180,7 +180,7 @@ def FieldAttr : GCCJIT_Attr<"Field", "field"> {
 
   let builders = [
     AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type), [{
-      return get($_ctxt, name, type, 0, std::nullopt);
+      return get($_ctxt, name, type, std::nullopt, std::nullopt);
     }]>,
     AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type,
                      "unsigned":$bitWidth), [{
@@ -188,12 +188,13 @@ def FieldAttr : GCCJIT_Attr<"Field", "field"> {
     }]>,
     AttrBuilder<(ins "mlir::StringAttr":$name, "mlir::Type":$type,
                      "mlir::gccjit::SourceLocAttr":$loc), [{
-      return get($_ctxt, name, type, 0, loc);
+      return get($_ctxt, name, type, std::nullopt, loc);
     }]>,
   ];
 
+  // attribute can eat up the `:` separator, so we need to move the name to the front
   let assemblyFormat = [{
-    `<` $type $name (`:` $bitWidth^)? ($loc^)? `>`
+    `<` $name $type  (`:` $bitWidth^)? ($loc^)? `>`
   }];
 }
 

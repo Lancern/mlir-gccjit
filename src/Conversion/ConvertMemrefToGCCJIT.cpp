@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <llvm-20/llvm/Support/Casting.h>
-#include <llvm-20/llvm/Support/ErrorHandling.h>
+#include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypeInterfaces.h>
+#include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/Location.h>
+#include <mlir/IR/Value.h>
 
 #include "libgccjit.h"
 #include "mlir-gccjit/Conversion/Conversions.h"
@@ -25,12 +31,6 @@
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir-gccjit/Passes.h"
-#include "mlir/IR/Builders.h"
-#include "mlir/IR/BuiltinAttributes.h"
-#include "mlir/IR/BuiltinTypeInterfaces.h"
-#include "mlir/IR/BuiltinTypes.h"
-#include "mlir/IR/Location.h"
-#include "mlir/IR/Value.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;

@@ -107,8 +107,9 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(AddrOp op);
   gcc_jit_rvalue *visitExprWithoutCache(FnAddrOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
-  gcc_jit_rvalue *visitExprWithoutCache(ExprOp op);
+  Expr visitExprWithoutCache(ExprOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
+  Expr visitExprWithoutCache(AccessFieldOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -515,18 +516,17 @@ Expr RegionVisitor::translateIntoContext() {
   Block &block = region.getBlocks().front();
   auto terminator = cast<gccjit::ReturnOp>(block.getTerminator());
   auto value = terminator->getOperand(0);
-  auto rvalue = visitExpr(value, true);
+  auto expr = visitExpr(value, true);
 
   if (auto globalOp = dyn_cast<gccjit::GlobalOp>(parent)) {
     auto symName = SymbolRefAttr::get(getMLIRContext(), globalOp.getSymName());
     auto *lvalue = getTranslator().getGlobalLValue(symName);
-    gcc_jit_global_set_initializer_rvalue(lvalue, rvalue);
+    gcc_jit_global_set_initializer_rvalue(lvalue, expr);
     return {};
   }
 
-  if (auto exprOp = dyn_cast<ExprOp>(parent)) {
-    return rvalue;
-  }
+  if (auto exprOp = dyn_cast<ExprOp>(parent))
+    return expr;
 
   llvm_unreachable("unknown region parent");
 }
@@ -558,8 +558,8 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](GetGlobalOp op) { return visitExprWithoutCache(op); })
             .Case([&](ExprOp op) { return visitExprWithoutCache(op); })
             .Case([&](DerefOp op) { return visitExprWithoutCache(op); })
+            .Case([&](AccessFieldOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
-              op->dump();
               llvm::report_fatal_error("unknown expression type");
             });
 
@@ -579,7 +579,22 @@ gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(DerefOp op) {
   return gcc_jit_context_new_array_access(getContext(), loc, ptr, offset);
 }
 
-gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(ExprOp op) {
+Expr RegionVisitor::visitExprWithoutCache(AccessFieldOp op) {
+  auto composite = visitExpr(op.getComposite());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *compositeTy = getTranslator().convertType(op.getComposite().getType());
+  auto index = op.getField().getZExtValue();
+  // TODO: support union and query from cache instead
+  auto *structure = gcc_jit_type_is_struct(compositeTy);
+  if (!structure)
+    llvm_unreachable("expected struct type");
+  auto *field = gcc_jit_struct_get_field(structure, index);
+  if (isa<LValueType>(op.getType()))
+    return gcc_jit_lvalue_access_field(composite, loc, field);
+  return gcc_jit_rvalue_access_field(composite, loc, field);
+}
+
+Expr RegionVisitor::visitExprWithoutCache(ExprOp op) {
   RegionVisitor visitor(getTranslator(), op.getRegion(), this);
   return visitor.translateIntoContext();
 }
