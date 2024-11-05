@@ -73,9 +73,9 @@ Value getMemRefDiscriptorAlignedPtr(OpBuilder &builder, Value descriptor,
                                     const GCCJITTypeConverter &converter,
                                     Location loc, MemRefType type) {
   auto elementType = converter.convertType(type.getElementType());
-  return builder.create<gccjit::AccessFieldOp>(
-      loc, PointerType::get(builder.getContext(), elementType), descriptor,
-      builder.getIndexAttr(1));
+  auto ptrTy = PointerType::get(builder.getContext(), elementType);
+  return builder.create<gccjit::AccessFieldOp>(loc, ptrTy, descriptor,
+                                               builder.getIndexAttr(1));
 }
 
 Value getMemRefDescriptorBufferPtr(OpBuilder &builder, Location loc,
@@ -130,8 +130,9 @@ Value getStridedElementLValue(Location loc, MemRefType type, Value descriptor,
       auto descriptorTy = cast<StructType>(descriptor.getType());
       auto fieldTy = cast<ArrayType>(
           cast<FieldAttr>(descriptorTy.getRecordFields()[4]).getType());
+      auto fieldLValueTy = LValueType::get(rewriter.getContext(), fieldTy);
       auto strideField = rewriter.create<gccjit::AccessFieldOp>(
-          loc, fieldTy, descriptor, rewriter.getIndexAttr(4));
+          loc, fieldLValueTy, materializedMemref, rewriter.getIndexAttr(4));
       auto ptrToStrideArray = rewriter.create<gccjit::AddrOp>(
           loc, PointerType::get(rewriter.getContext(), fieldTy), strideField);
       ptrToStrideField = rewriter.create<gccjit::BitCastOp>(
@@ -174,7 +175,6 @@ public:
   mlir::LogicalResult
   matchAndRewrite(memref::LoadOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
-    OpBuilder::InsertionGuard guard(rewriter);
     auto type = op.getMemRefType();
     auto retTy = typeConverter->convertType(op.getResult().getType());
     auto exprBundle = rewriter.replaceOpWithNewOp<ExprOp>(op, retTy);
@@ -185,6 +185,30 @@ public:
         adaptor.getIndices(), *getTypeConverter(), rewriter);
     auto rvalue = rewriter.create<AsRValueOp>(op.getLoc(), retTy, dataLValue);
     rewriter.create<ReturnOp>(op.getLoc(), rvalue);
+    return success();
+  }
+};
+
+class StoreOpLowering : public GCCJITLoweringPattern<memref::StoreOp> {
+public:
+  using GCCJITLoweringPattern::GCCJITLoweringPattern;
+  mlir::LogicalResult
+  matchAndRewrite(memref::StoreOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto type = op.getMemRefType();
+    auto elemTy = typeConverter->convertType(type.getElementType());
+    auto elemLValueTy = LValueType::get(rewriter.getContext(), elemTy);
+    auto expr = rewriter.create<ExprOp>(op->getLoc(), elemLValueTy, true);
+    auto *block = rewriter.createBlock(&expr.getBody());
+    {
+      rewriter.setInsertionPointToStart(block);
+      Value dataLValue = getStridedElementLValue(
+          op.getLoc(), type, adaptor.getMemref(), expr, adaptor.getIndices(),
+          *getTypeConverter(), rewriter);
+      rewriter.create<ReturnOp>(op.getLoc(), dataLValue);
+    }
+    rewriter.setInsertionPoint(op);
+    rewriter.replaceOpWithNewOp<AssignOp>(op, adaptor.getValue(), expr);
     return success();
   }
 };
@@ -204,10 +228,11 @@ void ConvertMemrefToGCCJITPass::runOnOperation() {
   typeConverter.addTargetMaterialization(materializeAsUnrealizedCast);
   typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
   mlir::RewritePatternSet patterns(&getContext());
-  patterns.insert<LoadOpLowering>(typeConverter, &getContext());
+  patterns.insert<LoadOpLowering, StoreOpLowering>(typeConverter,
+                                                   &getContext());
   mlir::ConversionTarget target(getContext());
   target.addLegalDialect<gccjit::GCCJITDialect>();
-  target.addIllegalOp<memref::LoadOp>();
+  target.addIllegalDialect<memref::MemRefDialect>();
   llvm::SmallVector<Operation *> ops;
   for (auto func : moduleOp.getOps<func::FuncOp>())
     ops.push_back(func);

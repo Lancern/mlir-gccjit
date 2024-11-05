@@ -779,7 +779,7 @@ def AccessFieldOp : GCCJIT_Op<"access_field"> {
     ```
   }];
   let arguments = (ins AnyType:$composite, IndexAttr:$field);
-  let results = (outs GCCJIT_LValueType:$result);
+  let results = (outs AnyType:$result);
   let assemblyFormat = [{
     $composite `[` $field `]` `:` functional-type(operands, results) attr-dict
   }];

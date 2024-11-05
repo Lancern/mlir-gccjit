@@ -1,4 +1,4 @@
-// RUN: %gccjit-opt %s -lower-affine -convert-scf-to-cf  -convert-arith-to-gccjit -convert-func-to-gccjit -reconcile-unrealized-casts | %filecheck %s
+// RUN: %gccjit-opt %s -lower-affine -convert-scf-to-cf  -convert-arith-to-gccjit -convert-memref-to-gccjit -convert-func-to-gccjit -reconcile-unrealized-casts | %filecheck %s
 module {
   // CHECK-NOT: func.func
   // CHECK-NOT: func.return
