@@ -7,8 +7,14 @@
 // RUN:     -reconcile-unrealized-casts -mlir-print-debuginfo -o %t.mlir 
 // RUN: %filecheck --input-file=%t.mlir %s
 // RUN: %gccjit-translate %t.mlir -mlir-to-gccjit-gimple | %filecheck %s --check-prefix=CHECK-GIMPLE
+// RUN: %gccjit-translate %t.mlir -mlir-to-gccjit-dylib -o %t.so
+// RUN: cc -O3 %p/gemm.c %t.so -Wl,-rpath,%T -o %t.exe
+// RUN: %t.exe | %filecheck %s --check-prefix=CHECK-OUTPUT
+
+// CHECK-OUTPUT: Verification passed! The matrices match.
 module @test attributes {
-      gccjit.opt_level = #gccjit.opt_level<O3>
+      gccjit.opt_level = #gccjit.opt_level<O3>,
+      gccjit.debug_info = true
 }
 {
   // CHECK-NOT: func.func
