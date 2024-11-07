@@ -718,18 +718,29 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AlignOfOp op) {
   auto type = op.getType();
   auto *typeHandle = getTranslator().convertType(type);
   auto *resTyHandle = getTranslator().convertType(op.getResult().getType());
-  auto *typePtrHandle = gcc_jit_type_get_pointer(typeHandle);
-  auto *nullPtr = gcc_jit_context_null(getContext(), typePtrHandle);
+  auto *charTyHandle =
+      gcc_jit_context_get_type(getContext(), GCC_JIT_TYPE_CHAR);
+  auto *charField =
+      gcc_jit_context_new_field(getContext(), nullptr, charTyHandle, "c");
+  auto *typeField =
+      gcc_jit_context_new_field(getContext(), nullptr, typeHandle, "t");
+  gcc_jit_field *fields[] = {charField, typeField};
+  auto *fakeStruct =
+      gcc_jit_context_new_struct_type(getContext(), nullptr, "fake", 2, fields);
+  auto *fakeStructHandle = gcc_jit_struct_as_type(fakeStruct);
+  auto *fakeStructPtrHandle = gcc_jit_type_get_pointer(fakeStructHandle);
+  auto *nullStructPtr = gcc_jit_context_null(getContext(), fakeStructPtrHandle);
+  auto *fakeStructLvalue = gcc_jit_rvalue_dereference(nullStructPtr, nullptr);
+  auto *fakeFieldAccess =
+      gcc_jit_lvalue_access_field(fakeStructLvalue, nullptr, typeField);
+  auto *fakeFieldAddr = gcc_jit_lvalue_get_address(fakeFieldAccess, nullptr);
   auto *indexTy = gcc_jit_context_get_type(getContext(), GCC_JIT_TYPE_SIZE_T);
-  auto *one = gcc_jit_context_one(getContext(), indexTy);
-  auto *loc = getTranslator().getLocation(op.getLoc());
-  auto *access =
-      gcc_jit_context_new_array_access(getContext(), loc, nullPtr, one);
-  auto *addr = gcc_jit_lvalue_get_address(access, loc);
-  auto *addrInt = gcc_jit_context_new_bitcast(getContext(), loc, addr, indexTy);
-  auto *align =
-      gcc_jit_context_new_cast(getContext(), loc, addrInt, resTyHandle);
-  return align;
+  auto *fakeFieldAddrValue = gcc_jit_context_new_bitcast(
+      getContext(), nullptr, fakeFieldAddr, indexTy);
+  if (indexTy != resTyHandle)
+    return gcc_jit_context_new_cast(getContext(), nullptr, fakeFieldAddrValue,
+                                    resTyHandle);
+  return fakeFieldAddrValue;
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AsRValueOp op) {
