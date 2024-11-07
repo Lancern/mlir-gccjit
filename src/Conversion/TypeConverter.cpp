@@ -210,7 +210,7 @@ Type GCCJITTypeConverter::convertAndPackTypesIfNonSingleton(
   if (types.size() == 0)
     return VoidType::get(func.getContext());
   if (types.size() == 1)
-    return types.front();
+    return convertType(types.front());
 
   auto name =
       Twine("__retpack_")
