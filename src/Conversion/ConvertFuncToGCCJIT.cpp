@@ -216,6 +216,17 @@ void ConvertFuncToGCCJITPass::runOnOperation() {
   auto moduleOp = getOperation();
   SymbolTable symbolTable(moduleOp);
   auto typeConverter = GCCJITTypeConverter();
+  auto materializeAsUnrealizedCast = [](OpBuilder &builder, Type resultType,
+                                        ValueRange inputs,
+                                        Location loc) -> Value {
+    if (inputs.size() != 1)
+      return Value();
+
+    return builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)
+        .getResult(0);
+  };
+  typeConverter.addTargetMaterialization(materializeAsUnrealizedCast);
+  typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
   mlir::RewritePatternSet patterns(&getContext());
   populateFuncToGCCJITPatterns(&getContext(), typeConverter, patterns,
                                symbolTable);
@@ -265,8 +276,8 @@ NewStructOp packValues(mlir::Location loc, mlir::ValueRange values,
                        mlir::TypeRange types,
                        mlir::ConversionPatternRewriter &rewriter,
                        FunctionType func) {
-  auto packedType =
-      typeConverter.convertAndPackTypesIfNonSingleton(types, func);
+  auto packedType = typeConverter.convertAndPackTypesIfNonSingleton(
+      types, rewriter.getContext());
   auto structType = cast<gccjit::StructType>(packedType);
   auto indices =
       llvm::to_vector(llvm::seq<int>(0, structType.getFields().size()));
@@ -318,11 +329,10 @@ public:
   matchAndRewrite(func::CallOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     auto callee = op.getCalleeAttr();
-    auto funcOp = dyn_cast<func::FuncOp>(symbolTable.lookup(callee.getValue()));
-    if (!funcOp)
-      return mlir::failure();
     Type resultTy = getTypeConverter()->convertAndPackTypesIfNonSingleton(
-        op->getResultTypes(), funcOp.getFunctionType());
+        op->getResultTypes(), getContext());
+    if (isa<VoidType>(resultTy))
+      resultTy = {};
     auto callOp = rewriter.create<gccjit::CallOp>(op.getLoc(), resultTy, callee,
                                                   adaptor.getOperands());
     if (op->getNumResults() <= 1)
@@ -349,7 +359,7 @@ public:
   matchAndRewrite(func::CallIndirectOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     auto resultTy = getTypeConverter()->convertAndPackTypesIfNonSingleton(
-        op->getResultTypes(), op.getCallee().getType());
+        op->getResultTypes(), getContext());
     auto callOp = rewriter.create<gccjit::PtrCallOp>(
         op.getLoc(), resultTy, adaptor.getCallee(), adaptor.getOperands());
     if (op->getNumResults() <= 1)

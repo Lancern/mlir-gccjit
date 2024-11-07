@@ -255,7 +255,7 @@ def SwitchOp : GCCJIT_Op<"switch", [Terminator, Pure, ParentOneOf<["FuncOp"]>]> 
 //===----------------------------------------------------------------------===//
 // LocalOp
 //===----------------------------------------------------------------------===//
-def LocalOp : GCCJIT_Op<"local", [ParentOneOf<["FuncOp"]>]> {
+def LocalOp : GCCJIT_Op<"local"> {
   let summary = "Declare a local variable";
   let description = [{
     The "local_var" operation declares a local variable.

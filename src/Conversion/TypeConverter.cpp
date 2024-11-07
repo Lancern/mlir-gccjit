@@ -20,6 +20,7 @@
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
+#include "mlir/IR/MLIRContext.h"
 #include <mlir/IR/BuiltinTypes.h>
 
 using namespace mlir;
@@ -145,7 +146,8 @@ GCCJITTypeConverter::convertFunctionType(mlir::FunctionType type,
   argTypes.reserve(type.getNumInputs());
   if (convertTypes(type.getInputs(), argTypes).failed())
     return {};
-  auto resultType = convertAndPackTypesIfNonSingleton(type.getResults(), type);
+  auto resultType =
+      convertAndPackTypesIfNonSingleton(type.getResults(), type.getContext());
   return FuncType::get(type.getContext(), argTypes, resultType, isVarArg);
 }
 
@@ -206,25 +208,22 @@ gccjit::StructType GCCJITTypeConverter::getUnrankedMemrefDescriptorType(
 }
 
 Type GCCJITTypeConverter::convertAndPackTypesIfNonSingleton(
-    TypeRange types, FunctionType func) const {
+    TypeRange types, MLIRContext *ctx) const {
   if (types.size() == 0)
-    return VoidType::get(func.getContext());
+    return VoidType::get(ctx);
   if (types.size() == 1)
     return convertType(types.front());
 
-  auto name =
-      Twine("__retpack_")
-          .concat(Twine(reinterpret_cast<uintptr_t>(func.getAsOpaquePointer())))
-          .str();
+  auto *name = "__return_pack";
   SmallVector<Attribute> fields;
   for (auto [idx, type] : llvm::enumerate(types)) {
     auto name = Twine("__field_").concat(Twine(idx)).str();
-    auto nameAttr = StringAttr::get(func.getContext(), name);
+    auto nameAttr = StringAttr::get(ctx, name);
     fields.push_back(FieldAttr::get(type.getContext(), nameAttr, type));
   }
-  auto nameAttr = StringAttr::get(func.getContext(), name);
-  auto fieldsAttr = ArrayAttr::get(func.getContext(), fields);
-  return StructType::get(func.getContext(), nameAttr, fieldsAttr);
+  auto nameAttr = StringAttr::get(ctx, name);
+  auto fieldsAttr = ArrayAttr::get(ctx, fields);
+  return StructType::get(ctx, nameAttr, fieldsAttr);
 }
 
 bool GCCJITTypeConverter::isSigned(gccjit::IntType type) const {

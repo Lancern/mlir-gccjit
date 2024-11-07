@@ -23,6 +23,7 @@
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
+#include "mlir/IR/MLIRContext.h"
 
 namespace mlir::gccjit {
 class GCCJITTypeConverter : public TypeConverter {
@@ -59,8 +60,7 @@ public:
   gccjit::StructType
   getUnrankedMemrefDescriptorType(mlir::UnrankedMemRefType type) const;
 
-  Type convertAndPackTypesIfNonSingleton(TypeRange types,
-                                         FunctionType name) const;
+  Type convertAndPackTypesIfNonSingleton(TypeRange types, MLIRContext *) const;
 };
 } // namespace mlir::gccjit
 #endif // MLIR_GCCJIT_CONVERSION_TYPECONVERTER_H
