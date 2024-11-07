@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mlir-gccjit/IR/GCCJITOps.h"
-
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringRef.h>
@@ -46,6 +44,7 @@
 #include <mlir/Support/LogicalResult.h>
 
 #include "mlir-gccjit/IR/GCCJITDialect.h"
+#include "mlir-gccjit/IR/GCCJITOps.h"
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 
@@ -264,13 +263,41 @@ ParseResult parseArrayOrVectorElements(
     OpAsmParser &parser, Type expectedType,
     llvm::SmallVectorImpl<OpAsmParser::UnresolvedOperand> &elementValues,
     llvm::SmallVectorImpl<Type> &elementTypes) {
-  llvm_unreachable("Not implemented");
+  bool mayContinue = true;
+  auto parseOptionalValueTypePair = [&]() -> ParseResult {
+    OpAsmParser::UnresolvedOperand elementValue;
+    Type elementType;
+    if (!parser.parseOptionalOperand(elementValue).has_value()) {
+      mayContinue = false;
+      return success();
+    }
+    if (parser.parseColonType(elementType))
+      return failure();
+    elementValues.push_back(elementValue);
+    elementTypes.push_back(elementType);
+    if (parser.parseOptionalComma().succeeded()) {
+      mayContinue = true;
+      return success();
+    }
+    mayContinue = false;
+    return success();
+  };
+  while (mayContinue)
+    if (parseOptionalValueTypePair().failed())
+      return failure();
+  return success();
 }
 
 void printArrayOrVectorElements(OpAsmPrinter &p, Operation *op,
                                 Type expectedType, OperandRange elementValues,
                                 ValueTypeRange<OperandRange> elementTypes) {
-  llvm_unreachable("Not implemented");
+  llvm::interleaveComma(llvm::zip(elementValues, elementTypes), p,
+                        [&](auto pair) {
+                          auto [value, type] = pair;
+                          p.printOperand(value);
+                          p << " : ";
+                          p.printType(type);
+                        });
 }
 
 struct ParseNamedUnitAttr {

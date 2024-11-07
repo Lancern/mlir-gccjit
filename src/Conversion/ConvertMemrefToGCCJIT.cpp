@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <llvm-20/llvm/Support/LogicalResult.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -22,7 +21,9 @@
 #include <mlir/IR/BuiltinTypeInterfaces.h>
 #include <mlir/IR/BuiltinTypes.h>
 #include <mlir/IR/Location.h>
+#include <mlir/IR/Types.h>
 #include <mlir/IR/Value.h>
+#include <mlir/Support/LogicalResult.h>
 
 #include "libgccjit.h"
 #include "mlir-gccjit/Conversion/Conversions.h"
@@ -32,7 +33,6 @@
 #include "mlir-gccjit/IR/GCCJITOpsEnums.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir-gccjit/Passes.h"
-#include "mlir/IR/Types.h"
 
 using namespace mlir;
 using namespace mlir::gccjit;
@@ -133,12 +133,13 @@ protected:
 
   virtual std::tuple<Value, Value>
   allocateBuffer(ConversionPatternRewriter &rewriter, Location loc, Value size,
-                 Operation *op) const = 0;
+                 OpType op) const = 0;
 
 private:
   static constexpr uint64_t kMinAlignedAllocAlignment = 16UL;
 
 public:
+  using GCCJITLoweringPattern<OpType>::GCCJITLoweringPattern;
   LogicalResult
   matchAndRewrite(OpType op,
                   typename OpConversionPattern<OpType>::OpAdaptor adaptor,
@@ -190,33 +191,6 @@ public:
     return success();
   }
 };
-
-void ConvertMemrefToGCCJITPass::runOnOperation() {
-  auto moduleOp = getOperation();
-  auto typeConverter = GCCJITTypeConverter();
-  auto materializeAsUnrealizedCast = [](OpBuilder &builder, Type resultType,
-                                        ValueRange inputs,
-                                        Location loc) -> Value {
-    if (inputs.size() != 1)
-      return Value();
-
-    return builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)
-        .getResult(0);
-  };
-  typeConverter.addTargetMaterialization(materializeAsUnrealizedCast);
-  typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
-  mlir::RewritePatternSet patterns(&getContext());
-  patterns.insert<LoadOpLowering, StoreOpLowering>(typeConverter,
-                                                   &getContext());
-  mlir::ConversionTarget target(getContext());
-  target.addLegalDialect<gccjit::GCCJITDialect>();
-  target.addIllegalDialect<memref::MemRefDialect>();
-  llvm::SmallVector<Operation *> ops;
-  for (auto func : moduleOp.getOps<func::FuncOp>())
-    ops.push_back(func);
-  if (failed(applyPartialConversion(ops, target, std::move(patterns))))
-    signalPassFailure();
-}
 
 template <typename T> IntType GCCJITLoweringPattern<T>::getIndexType() const {
   return IntType::get(this->getContext(), GCC_JIT_TYPE_SIZE_T);
@@ -472,6 +446,7 @@ Value AllocationLowering<OpType>::allocateBufferAutoAlign(
   return rewriter.create<gccjit::BitCastOp>(loc, elementPtrType, result);
 }
 
+[[gnu::used]]
 bool isConvertibleAndHasIdentityMaps(MemRefType type,
                                      const GCCJITTypeConverter &typeConverter) {
   if (!typeConverter.convertType(type.getElementType()))
@@ -485,7 +460,7 @@ void GCCJITLoweringPattern<OpType>::getMemRefDescriptorSizes(
     ConversionPatternRewriter &rewriter, SmallVectorImpl<Value> &sizes,
     SmallVectorImpl<Value> &strides, Value &size, bool sizeInBytes) const {
   assert(
-      isConvertibleAndHasIdentityMaps(memRefType, this->getTypeConverter()) &&
+      isConvertibleAndHasIdentityMaps(memRefType, *this->getTypeConverter()) &&
       "layout maps must have been normalized away");
   assert(count(memRefType.getShape(), ShapedType::kDynamic) ==
              static_cast<ssize_t>(dynamicSizes.size()) &&
@@ -528,6 +503,8 @@ void GCCJITLoweringPattern<OpType>::getMemRefDescriptorSizes(
     Type elementType =
         this->getTypeConverter()->convertType(memRefType.getElementType());
     size = rewriter.create<gccjit::SizeOfOp>(loc, indexType, elementType);
+    size = rewriter.create<gccjit::BinaryOp>(loc, indexType, BOp::Mult, size,
+                                             runningStride);
   } else {
     size = runningStride;
   }
@@ -565,18 +542,94 @@ LogicalResult AllocationLowering<OpType>::matchAndRewrite(
       return rewriter.notifyMatchFailure(loc,
                                          "underlying buffer allocation failed");
 
+    auto arrayTy = ArrayType::get(rewriter.getContext(), this->getIndexType(),
+                                  memRefType.getRank());
+    auto sizeArr = rewriter.create<gccjit::NewArrayOp>(loc, arrayTy, sizes);
+    auto strideArr = rewriter.create<gccjit::NewArrayOp>(loc, arrayTy, strides);
+    auto zero =
+        this->createIndexAttrConstant(rewriter, loc, this->getIndexType(), 0);
     // Create the MemRef descriptor.
     auto memRefDescriptor = rewriter.create<gccjit::NewStructOp>(
         loc, convertedType, ArrayRef<int32_t>{0, 1, 2, 3, 4},
-        ValueRange{alignedPtr, allocatedPtr, size});
+        ValueRange{alignedPtr, allocatedPtr, zero, sizeArr, strideArr});
 
     // Return the final value of the descriptor.
     rewriter.create<ReturnOp>(loc, memRefDescriptor);
   }
-  // Return the final value of the descriptor.
-  rewriter.replaceOp(op, exprBundle);
   return success();
 }
+
+struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
+  using AllocationLowering<memref::AllocaOp>::AllocationLowering;
+  std::tuple<Value, Value>
+  allocateBuffer(ConversionPatternRewriter &rewriter, Location loc, Value size,
+                 memref::AllocaOp op) const override final {
+    auto allocaOp = cast<memref::AllocaOp>(op);
+    auto elementType =
+        typeConverter->convertType(allocaOp.getType().getElementType());
+
+    if (allocaOp.getType().getMemorySpace())
+      return std::make_tuple(Value(), Value());
+
+    auto elementPtrType = PointerType::get(rewriter.getContext(), elementType);
+
+    Value alloca;
+
+    if (auto align = op.getAlignment()) {
+      auto alignment =
+          createIndexAttrConstant(rewriter, loc, getIndexType(), *align);
+      alloca = rewriter
+                   .create<CallOp>(loc, getVoidPtrType(),
+                                   SymbolRefAttr::get(rewriter.getContext(),
+                                                      "alloca_with_align"),
+                                   ValueRange{size, alignment},
+                                   /* tailcall */ nullptr,
+                                   /* builtin */ rewriter.getUnitAttr())
+                   .getResult();
+    } else {
+      alloca = rewriter
+                   .create<CallOp>(
+                       loc, getVoidPtrType(),
+                       SymbolRefAttr::get(rewriter.getContext(), "alloca"),
+                       ValueRange{size},
+                       /* tailcall */ nullptr,
+                       /* builtin */ rewriter.getUnitAttr())
+                   .getResult();
+    }
+
+    alloca = rewriter.create<BitCastOp>(loc, elementPtrType, alloca);
+
+    return std::make_tuple(alloca, alloca);
+  }
+};
+
+void ConvertMemrefToGCCJITPass::runOnOperation() {
+  auto moduleOp = getOperation();
+  auto typeConverter = GCCJITTypeConverter();
+  auto materializeAsUnrealizedCast = [](OpBuilder &builder, Type resultType,
+                                        ValueRange inputs,
+                                        Location loc) -> Value {
+    if (inputs.size() != 1)
+      return Value();
+
+    return builder.create<UnrealizedConversionCastOp>(loc, resultType, inputs)
+        .getResult(0);
+  };
+  typeConverter.addTargetMaterialization(materializeAsUnrealizedCast);
+  typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
+  mlir::RewritePatternSet patterns(&getContext());
+  patterns.insert<LoadOpLowering, StoreOpLowering, AllocaOpLowering>(
+      typeConverter, &getContext());
+  mlir::ConversionTarget target(getContext());
+  target.addLegalDialect<gccjit::GCCJITDialect>();
+  target.addIllegalDialect<memref::MemRefDialect>();
+  llvm::SmallVector<Operation *> ops;
+  for (auto func : moduleOp.getOps<func::FuncOp>())
+    ops.push_back(func);
+  if (failed(applyPartialConversion(ops, target, std::move(patterns))))
+    signalPassFailure();
+}
+
 } // namespace
 
 std::unique_ptr<Pass> mlir::gccjit::createConvertMemrefToGCCJITPass() {
