@@ -15,6 +15,7 @@
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <utility>
 
 #include <llvm/ADT/SmallVector.h>
@@ -106,6 +107,8 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(PtrCallOp op);
   gcc_jit_rvalue *visitExprWithoutCache(AddrOp op);
   gcc_jit_rvalue *visitExprWithoutCache(FnAddrOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(NewStructOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(NewArrayOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
   Expr visitExprWithoutCache(ExprOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
@@ -571,6 +574,8 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](ExprOp op) { return visitExprWithoutCache(op); })
             .Case([&](DerefOp op) { return visitExprWithoutCache(op); })
             .Case([&](AccessFieldOp op) { return visitExprWithoutCache(op); })
+            .Case([&](NewStructOp op) { return visitExprWithoutCache(op); })
+            .Case([&](NewArrayOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
               llvm::report_fatal_error("unknown expression type");
             });
@@ -604,6 +609,32 @@ Expr RegionVisitor::visitExprWithoutCache(AccessFieldOp op) {
   if (isa<LValueType>(op.getType()))
     return gcc_jit_lvalue_access_field(composite, loc, field);
   return gcc_jit_rvalue_access_field(composite, loc, field);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewStructOp op) {
+  auto *rawStructTy = getTranslator().convertType(op.getType());
+  auto *structTy = gcc_jit_type_is_struct(rawStructTy);
+  if (!structTy)
+    llvm_unreachable("expected struct type");
+  llvm::SmallVector<gcc_jit_field *> fields;
+  llvm::SmallVector<gcc_jit_rvalue *> values;
+  for (auto field : op.getIndices())
+    fields.push_back(
+        gcc_jit_struct_get_field(structTy, static_cast<size_t>(field)));
+  visitExprAsRValue(op.getElements(), values);
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  return gcc_jit_context_new_struct_constructor(getContext(), loc, rawStructTy,
+                                                values.size(), fields.data(),
+                                                values.data());
+}
+
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewArrayOp op) {
+  auto *arrayTy = getTranslator().convertType(op.getType());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  llvm::SmallVector<gcc_jit_rvalue *> values;
+  visitExprAsRValue(op.getElements(), values);
+  return gcc_jit_context_new_array_constructor(getContext(), loc, arrayTy,
+                                               values.size(), values.data());
 }
 
 Expr RegionVisitor::visitExprWithoutCache(ExprOp op) {
@@ -663,11 +694,42 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(LiteralOp op) {
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(SizeOfOp op) {
   auto type = op.getType();
   auto *typeHandle = getTranslator().convertType(type);
-  return gcc_jit_context_new_sizeof(getContext(), typeHandle);
+  auto *size = gcc_jit_context_new_sizeof(getContext(), typeHandle);
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto resTy = op.getResult().getType();
+  auto *resTyHandle = getTranslator().convertType(resTy);
+  if (resTy.getKind() != GCC_JIT_TYPE_INT)
+    size = gcc_jit_context_new_cast(getContext(), loc, size, resTyHandle);
+  return size;
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AlignOfOp op) {
-  llvm_unreachable("GCCJIT does not support alignof yet");
+#ifdef LIBGCCJIT_ABI_28
+  auto type = op.getType();
+  auto *typeHandle = getTranslator().convertType(type);
+  auto *align = gcc_jit_context_new_alignof(getContext(), typeHandle);
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto resTy = op.getResult().getType();
+  auto *resTyHandle = getTranslator().convertType(resTy);
+  if (resTy.getKind() != GCC_JIT_TYPE_INT)
+    align = gcc_jit_context_new_cast(getContext(), loc, align, resTyHandle);
+  return align;
+#endif
+  auto type = op.getType();
+  auto *typeHandle = getTranslator().convertType(type);
+  auto *resTyHandle = getTranslator().convertType(op.getResult().getType());
+  auto *typePtrHandle = gcc_jit_type_get_pointer(typeHandle);
+  auto *nullPtr = gcc_jit_context_null(getContext(), typePtrHandle);
+  auto *indexTy = gcc_jit_context_get_type(getContext(), GCC_JIT_TYPE_SIZE_T);
+  auto *one = gcc_jit_context_one(getContext(), indexTy);
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto *access =
+      gcc_jit_context_new_array_access(getContext(), loc, nullPtr, one);
+  auto *addr = gcc_jit_lvalue_get_address(access, loc);
+  auto *addrInt = gcc_jit_context_new_bitcast(getContext(), loc, addr, indexTy);
+  auto *align =
+      gcc_jit_context_new_cast(getContext(), loc, addrInt, resTyHandle);
+  return align;
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AsRValueOp op) {

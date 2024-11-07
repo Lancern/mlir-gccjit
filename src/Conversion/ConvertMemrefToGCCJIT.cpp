@@ -121,19 +121,13 @@ protected:
   int64_t alignedAllocationGetAlignment(ConversionPatternRewriter &rewriter,
                                         Location loc, OpType op) const;
 
-  std::tuple<Value, Value>
-  allocateBufferManuallyAlign(ConversionPatternRewriter &rewriter, Location loc,
-                              Value sizeBytes, OpType op,
-                              Value alignment) const;
-
   /// Allocates a memory buffer using an aligned allocation method.
   Value allocateBufferAutoAlign(ConversionPatternRewriter &rewriter,
                                 Location loc, Value sizeBytes, OpType op,
-                                int64_t alignment) const;
+                                Value alignment) const;
 
-  virtual std::tuple<Value, Value>
-  allocateBuffer(ConversionPatternRewriter &rewriter, Location loc, Value size,
-                 OpType op) const = 0;
+  virtual void allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
+                              Value size, OpType op) const = 0;
 
 private:
   static constexpr uint64_t kMinAlignedAllocAlignment = 16UL;
@@ -366,7 +360,7 @@ Value AllocationLowering<OpType>::getAlignment(
     Type indexType = this->getIndexType();
     alignment =
         this->createIndexAttrConstant(rewriter, loc, indexType, *alignmentAttr);
-  } else if (!memRefType.getElementType().isSignlessIntOrIndexOrFloat()) {
+  } else {
     alignment =
         this->getAlignInBytes(loc, memRefType.getElementType(), rewriter);
   }
@@ -390,62 +384,20 @@ Value AllocationLowering<OpType>::createAligned(
 }
 
 template <typename OpType>
-std::tuple<Value, Value>
-AllocationLowering<OpType>::allocateBufferManuallyAlign(
+Value AllocationLowering<OpType>::allocateBufferAutoAlign(
     ConversionPatternRewriter &rewriter, Location loc, Value sizeBytes,
-    OpType op, Value alignment) const {
-  if (alignment) {
-    // Adjust the allocation size to consider alignment.
-    sizeBytes = rewriter.create<gccjit::BinaryOp>(
-        loc, sizeBytes.getType(), BOp::Plus, sizeBytes, alignment);
-  }
-
+    OpType op, Value allocAlignment) const {
   MemRefType memRefType = getMemRefResultType(op);
-  // Allocate the underlying buffer.
+  sizeBytes = createAligned(rewriter, loc, sizeBytes, allocAlignment);
   Type elementPtrType = this->getElementPtrType(memRefType);
-  Value allocatedPtr =
+  auto result =
       rewriter
           .create<gccjit::CallOp>(
               loc, this->getVoidPtrType(),
-              SymbolRefAttr::get(this->getContext(), "malloc"),
-              ValueRange{sizeBytes},
+              SymbolRefAttr::get(this->getContext(), "aligned_alloc"),
+              ValueRange{allocAlignment, sizeBytes},
               /* tailcall */ nullptr, /* builtin */ rewriter.getUnitAttr())
           .getResult();
-
-  if (!allocatedPtr)
-    return std::make_tuple(Value(), Value());
-  Value alignedPtr = allocatedPtr;
-  if (alignment) {
-    // Compute the aligned pointer.
-    Value allocatedInt = rewriter.create<gccjit::BitCastOp>(
-        loc, this->getIndexType(), allocatedPtr);
-    Value alignmentInt = createAligned(rewriter, loc, allocatedInt, alignment);
-    alignedPtr =
-        rewriter.create<gccjit::BitCastOp>(loc, elementPtrType, alignmentInt);
-  } else {
-    alignedPtr =
-        rewriter.create<gccjit::BitCastOp>(loc, elementPtrType, allocatedPtr);
-  }
-
-  return std::make_tuple(allocatedPtr, alignedPtr);
-}
-
-template <typename OpType>
-Value AllocationLowering<OpType>::allocateBufferAutoAlign(
-    ConversionPatternRewriter &rewriter, Location loc, Value sizeBytes,
-    OpType op, int64_t alignment) const {
-  Value allocAlignment =
-      createIndexAttrConstant(rewriter, loc, this->getIndexType(), alignment);
-
-  MemRefType memRefType = getMemRefResultType(op);
-  sizeBytes = createAligned(rewriter, loc, sizeBytes, allocAlignment);
-
-  Type elementPtrType = this->getElementPtrType(memRefType);
-  auto result = rewriter.create<gccjit::CallOp>(
-      loc, this->getVoidPtrType(),
-      SymbolRefAttr::get(this->getContext(), "aligned_alloc"),
-      ValueRange{allocAlignment, sizeBytes},
-      /* tailcall */ nullptr, /* builtin */ rewriter.getUnitAttr());
 
   return rewriter.create<gccjit::BitCastOp>(loc, elementPtrType, result);
 }
@@ -523,57 +475,47 @@ LogicalResult AllocationLowering<OpType>::matchAndRewrite(
     return rewriter.notifyMatchFailure(op, "incompatible memref type");
   auto loc = op->getLoc();
   auto convertedType = this->getTypeConverter()->convertType(memRefType);
-  auto exprBundle = rewriter.replaceOpWithNewOp<ExprOp>(op, convertedType);
-  auto *block = rewriter.createBlock(&exprBundle.getBody());
+
+  // Get actual sizes of the memref as values: static sizes are constant
+  // values and dynamic sizes are passed to 'alloc' as operands.  In case of
+  // zero-dimensional memref, assume a scalar (size 1).
+  SmallVector<Value, 4> sizes;
+  SmallVector<Value, 4> strides;
+  Value size;
+
+  this->getMemRefDescriptorSizes(loc, memRefType, adaptor.getOperands(),
+                                 rewriter, sizes, strides, size, true);
+  auto elementPtrType = this->getElementPtrType(memRefType);
+  auto exprBundle = rewriter.create<ExprOp>(op.getLoc(), elementPtrType);
   {
-    OpBuilder::InsertionGuard guard(rewriter);
+    auto *block = rewriter.createBlock(&exprBundle.getBody());
     rewriter.setInsertionPointToStart(block);
-    // Get actual sizes of the memref as values: static sizes are constant
-    // values and dynamic sizes are passed to 'alloc' as operands.  In case of
-    // zero-dimensional memref, assume a scalar (size 1).
-    SmallVector<Value, 4> sizes;
-    SmallVector<Value, 4> strides;
-    Value size;
-
-    this->getMemRefDescriptorSizes(loc, memRefType, adaptor.getOperands(),
-                                   rewriter, sizes, strides, size, true);
-
     // Allocate the underlying buffer.
-    auto [allocatedPtr, alignedPtr] =
-        this->allocateBuffer(rewriter, loc, size, op);
-
-    if (!allocatedPtr || !alignedPtr)
-      return rewriter.notifyMatchFailure(loc,
-                                         "underlying buffer allocation failed");
-
-    auto arrayTy = ArrayType::get(rewriter.getContext(), this->getIndexType(),
-                                  memRefType.getRank());
-    auto sizeArr = rewriter.create<gccjit::NewArrayOp>(loc, arrayTy, sizes);
-    auto strideArr = rewriter.create<gccjit::NewArrayOp>(loc, arrayTy, strides);
-    auto zero =
-        this->createIndexAttrConstant(rewriter, loc, this->getIndexType(), 0);
-    // Create the MemRef descriptor.
-    auto memRefDescriptor = rewriter.create<gccjit::NewStructOp>(
-        loc, convertedType, ArrayRef<int32_t>{0, 1, 2, 3, 4},
-        ValueRange{alignedPtr, allocatedPtr, zero, sizeArr, strideArr});
-
-    // Return the final value of the descriptor.
-    rewriter.create<ReturnOp>(loc, memRefDescriptor);
+    this->allocateBuffer(rewriter, loc, size, op);
   }
+  rewriter.setInsertionPoint(op);
+
+  auto arrayTy = ArrayType::get(rewriter.getContext(), this->getIndexType(),
+                                memRefType.getRank());
+  auto sizeArr = rewriter.create<gccjit::NewArrayOp>(loc, arrayTy, sizes);
+  auto strideArr = rewriter.create<gccjit::NewArrayOp>(loc, arrayTy, strides);
+  auto zero =
+      this->createIndexAttrConstant(rewriter, loc, this->getIndexType(), 0);
+  // Create the MemRef descriptor.
+  rewriter.replaceOpWithNewOp<gccjit::NewStructOp>(
+      op, convertedType, ArrayRef<int32_t>{0, 1, 2, 3, 4},
+      ValueRange{exprBundle, exprBundle, zero, sizeArr, strideArr});
+
   return success();
 }
 
 struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
   using AllocationLowering<memref::AllocaOp>::AllocationLowering;
-  std::tuple<Value, Value>
-  allocateBuffer(ConversionPatternRewriter &rewriter, Location loc, Value size,
-                 memref::AllocaOp op) const override final {
+  void allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
+                      Value size, memref::AllocaOp op) const override final {
     auto allocaOp = cast<memref::AllocaOp>(op);
     auto elementType =
         typeConverter->convertType(allocaOp.getType().getElementType());
-
-    if (allocaOp.getType().getMemorySpace())
-      return std::make_tuple(Value(), Value());
 
     auto elementPtrType = PointerType::get(rewriter.getContext(), elementType);
 
@@ -600,19 +542,18 @@ struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
                        /* builtin */ rewriter.getUnitAttr())
                    .getResult();
     }
-
     alloca = rewriter.create<BitCastOp>(loc, elementPtrType, alloca);
-
-    return std::make_tuple(alloca, alloca);
+    rewriter.create<ReturnOp>(loc, alloca);
   }
 };
 
 struct AllocOpLowering : public AllocationLowering<memref::AllocOp> {
-  std::tuple<Value, Value>
-  allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
-                 Value sizeBytes, memref::AllocOp op) const override final {
-    return allocateBufferManuallyAlign(rewriter, loc, sizeBytes, op,
-                                       getAlignment(rewriter, loc, op));
+  void allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
+                      Value sizeBytes,
+                      memref::AllocOp op) const override final {
+    auto result = allocateBufferAutoAlign(rewriter, loc, sizeBytes, op,
+                                          getAlignment(rewriter, loc, op));
+    rewriter.create<ReturnOp>(loc, result);
   }
   using AllocationLowering<memref::AllocOp>::AllocationLowering;
 };
