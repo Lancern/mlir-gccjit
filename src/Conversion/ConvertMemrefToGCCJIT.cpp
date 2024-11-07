@@ -365,7 +365,7 @@ Value AllocationLowering<OpType>::getAlignment(
   if (auto alignmentAttr = op.getAlignment()) {
     Type indexType = this->getIndexType();
     alignment =
-        createIndexAttrConstant(rewriter, loc, indexType, *alignmentAttr);
+        this->createIndexAttrConstant(rewriter, loc, indexType, *alignmentAttr);
   } else if (!memRefType.getElementType().isSignlessIntOrIndexOrFloat()) {
     alignment =
         this->getAlignInBytes(loc, memRefType.getElementType(), rewriter);
@@ -603,6 +603,16 @@ struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
   }
 };
 
+struct AllocOpLowering : public AllocationLowering<memref::AllocOp> {
+  std::tuple<Value, Value>
+  allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
+                 Value sizeBytes, memref::AllocOp op) const override final {
+    return allocateBufferManuallyAlign(rewriter, loc, sizeBytes, op,
+                                       getAlignment(rewriter, loc, op));
+  }
+  using AllocationLowering<memref::AllocOp>::AllocationLowering;
+};
+
 void ConvertMemrefToGCCJITPass::runOnOperation() {
   auto moduleOp = getOperation();
   auto typeConverter = GCCJITTypeConverter();
@@ -618,8 +628,8 @@ void ConvertMemrefToGCCJITPass::runOnOperation() {
   typeConverter.addTargetMaterialization(materializeAsUnrealizedCast);
   typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
   mlir::RewritePatternSet patterns(&getContext());
-  patterns.insert<LoadOpLowering, StoreOpLowering, AllocaOpLowering>(
-      typeConverter, &getContext());
+  patterns.insert<LoadOpLowering, StoreOpLowering, AllocaOpLowering,
+                  AllocOpLowering>(typeConverter, &getContext());
   mlir::ConversionTarget target(getContext());
   target.addLegalDialect<gccjit::GCCJITDialect>();
   target.addIllegalDialect<memref::MemRefDialect>();
