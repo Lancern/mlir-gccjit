@@ -403,10 +403,14 @@ AllocationLowering<OpType>::allocateBufferManuallyAlign(
   MemRefType memRefType = getMemRefResultType(op);
   // Allocate the underlying buffer.
   Type elementPtrType = this->getElementPtrType(memRefType);
-  Value allocatedPtr = rewriter.create<gccjit::CallOp>(
-      loc, this->getVoidPtrType(),
-      SymbolRefAttr::get(this->getContext(), "malloc"), ValueRange{sizeBytes},
-      /* tailcall */ nullptr, /* builtin */ rewriter.getUnitAttr());
+  Value allocatedPtr =
+      rewriter
+          .create<gccjit::CallOp>(
+              loc, this->getVoidPtrType(),
+              SymbolRefAttr::get(this->getContext(), "malloc"),
+              ValueRange{sizeBytes},
+              /* tailcall */ nullptr, /* builtin */ rewriter.getUnitAttr())
+          .getResult();
 
   if (!allocatedPtr)
     return std::make_tuple(Value(), Value());
