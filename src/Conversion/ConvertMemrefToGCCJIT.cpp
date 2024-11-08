@@ -509,6 +509,32 @@ LogicalResult AllocationLowering<OpType>::matchAndRewrite(
   return success();
 }
 
+struct DeallocOpLowering : public GCCJITLoweringPattern<memref::DeallocOp> {
+  using GCCJITLoweringPattern<memref::DeallocOp>::GCCJITLoweringPattern;
+  LogicalResult
+  matchAndRewrite(memref::DeallocOp op, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    if ([[maybe_unused]] auto unrankedTy =
+            llvm::dyn_cast<UnrankedMemRefType>(op.getMemref().getType())) {
+      return rewriter.notifyMatchFailure(op,
+                                         "unranked memref type not supported");
+    }
+
+    Value ptr = getMemRefDescriptor(adaptor.getMemref(),
+                                    cast<MemRefType>(op.getMemref().getType()),
+                                    rewriter)
+                    .getMemRefDescriptorBufferPtr(op.getLoc());
+    auto voidPtrValue =
+        rewriter.create<gccjit::BitCastOp>(op.getLoc(), getVoidPtrType(), ptr);
+
+    rewriter.replaceOpWithNewOp<gccjit::CallOp>(
+        op, Type{}, SymbolRefAttr::get(rewriter.getContext(), "free"),
+        ValueRange{voidPtrValue},
+        /* tailcall */ nullptr, /* builtin */ rewriter.getUnitAttr());
+    return success();
+  }
+};
+
 struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
   using AllocationLowering<memref::AllocaOp>::AllocationLowering;
   void allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
@@ -574,7 +600,8 @@ void ConvertMemrefToGCCJITPass::runOnOperation() {
   typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
   mlir::RewritePatternSet patterns(&getContext());
   patterns.insert<LoadOpLowering, StoreOpLowering, AllocaOpLowering,
-                  AllocOpLowering>(typeConverter, &getContext());
+                  AllocOpLowering, DeallocOpLowering>(typeConverter,
+                                                      &getContext());
   mlir::ConversionTarget target(getContext());
   target.addLegalDialect<gccjit::GCCJITDialect>();
   target.addIllegalDialect<memref::MemRefDialect>();
