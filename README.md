@@ -1,5 +1,20 @@
 # mlir-gccjit
 
+<style>
+img
+{
+    display:block;
+    float:none;
+    margin-left:auto;
+    margin-right:auto;
+    width:30%;
+}
+</style>
+
+
+![MLIR GCCJIT](logo.png)
+
+
 MLIR dialect for [`libgccjit`](https://gcc.gnu.org/onlinedocs/jit/).
 
 ## Prerequisites
