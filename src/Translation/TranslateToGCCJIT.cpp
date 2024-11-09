@@ -704,7 +704,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(SizeOfOp op) {
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AlignOfOp op) {
-#ifdef LIBGCCJIT_ABI_28
+#ifdef LIBGCCJIT_HAVE_gcc_jit_context_new_alignof
   auto type = op.getType();
   auto *typeHandle = getTranslator().convertType(type);
   auto *align = gcc_jit_context_new_alignof(getContext(), typeHandle);
