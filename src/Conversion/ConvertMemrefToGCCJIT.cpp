@@ -555,22 +555,23 @@ struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
     if (auto align = op.getAlignment()) {
       auto alignment =
           createIndexAttrConstant(rewriter, loc, getIndexType(), *align);
+      alloca =
+          rewriter
+              .create<CallOp>(loc, getVoidPtrType(),
+                              SymbolRefAttr::get(rewriter.getContext(),
+                                                 "__builtin_alloca_with_align"),
+                              ValueRange{size, alignment},
+                              /* tailcall */ nullptr,
+                              /* builtin */ rewriter.getUnitAttr())
+              .getResult();
+    } else {
       alloca = rewriter
                    .create<CallOp>(loc, getVoidPtrType(),
                                    SymbolRefAttr::get(rewriter.getContext(),
-                                                      "alloca_with_align"),
-                                   ValueRange{size, alignment},
+                                                      "__builtin_alloca"),
+                                   ValueRange{size},
                                    /* tailcall */ nullptr,
                                    /* builtin */ rewriter.getUnitAttr())
-                   .getResult();
-    } else {
-      alloca = rewriter
-                   .create<CallOp>(
-                       loc, getVoidPtrType(),
-                       SymbolRefAttr::get(rewriter.getContext(), "alloca"),
-                       ValueRange{size},
-                       /* tailcall */ nullptr,
-                       /* builtin */ rewriter.getUnitAttr())
                    .getResult();
     }
     alloca = rewriter.create<BitCastOp>(loc, elementPtrType, alloca);
