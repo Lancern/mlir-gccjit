@@ -903,4 +903,102 @@ def AsmGotoOp : GCCJIT_Op<"asm_goto", [Terminator, ParentOneOf<["FuncOp"]>, Attr
     `)` attr-dict
   }];
 }
+
+//===----------------------------------------------------------------------===//
+// Type Generic Atomic Operations
+//===----------------------------------------------------------------------===//
+def ATOMIC_ORD_RELAXED : I32EnumAttrCase<"Relaxed", 0, "relaxed">;
+def ATOMIC_ORD_CONSUME : I32EnumAttrCase<"Consume", 1, "consume">;
+def ATOMIC_ORD_ACQUIRE : I32EnumAttrCase<"Acquire", 2, "acquire">;
+def ATOMIC_ORD_RELEASE : I32EnumAttrCase<"Release", 3, "release">;
+def ATOMIC_ORD_ACQ_REL : I32EnumAttrCase<"AcqRel", 4, "acq_rel">;
+def ATOMIC_ORD_SEQ_CST : I32EnumAttrCase<"SeqCst", 5, "seq_cst">;
+
+def AtomicOrderingAttr : I32EnumAttr<"AtomicOrdering", "atomic ordering", [
+  ATOMIC_ORD_RELAXED, ATOMIC_ORD_CONSUME, ATOMIC_ORD_ACQUIRE,
+  ATOMIC_ORD_RELEASE, ATOMIC_ORD_ACQ_REL, ATOMIC_ORD_SEQ_CST
+]> {
+  let cppNamespace = "::mlir::gccjit";
+}
+
+def ATOMIC_RMW_STORE : I32EnumAttrCase<"Store", 0, "store">;
+def ATOMIC_RMW_XCHG : I32EnumAttrCase<"Xchg", 1, "xchg">;
+def ATOMIC_RMW_ADD_FECTH : I32EnumAttrCase<"AddFetch", 2, "add_fetch">;
+def ATOMIC_RMW_SUB_FECTH : I32EnumAttrCase<"SubFetch", 3, "sub_fetch">;
+def ATOMIC_RMW_AND_FECTH : I32EnumAttrCase<"AndFetch", 4, "and_fetch">;
+def ATOMIC_RMW_NAND_FECTH : I32EnumAttrCase<"NandFetch", 5, "nand_fetch">;
+def ATOMIC_RMW_OR_FECTH : I32EnumAttrCase<"OrFetch", 6, "or_fetch">;
+def ATOMIC_RMW_XOR_FECTH : I32EnumAttrCase<"XorFetch", 7, "xor_fetch">;
+def ATOMIC_RMW_FETCH_ADD : I32EnumAttrCase<"FetchAdd", 8, "fetch_add">;
+def ATOMIC_RMW_FETCH_SUB : I32EnumAttrCase<"FetchSub", 9, "fetch_sub">;
+def ATOMIC_RMW_FETCH_AND : I32EnumAttrCase<"FetchAnd", 10, "fetch_and">;
+def ATOMIC_RMW_FETCH_NAND : I32EnumAttrCase<"FetchNand", 11, "fetch_nand">;
+def ATOMIC_RMW_FETCH_OR : I32EnumAttrCase<"FetchOr", 12, "fetch_or">;
+def ATOMIC_RMW_FETCH_XOR : I32EnumAttrCase<"FetchXor", 13, "fetch_xor">;
+
+def AtomicRMWKindAttr : I32EnumAttr<"AtomicRMWKind", "atomic rmw operation", [
+  ATOMIC_RMW_STORE, ATOMIC_RMW_XCHG, ATOMIC_RMW_ADD_FECTH, ATOMIC_RMW_SUB_FECTH,
+  ATOMIC_RMW_AND_FECTH, ATOMIC_RMW_NAND_FECTH, ATOMIC_RMW_OR_FECTH, ATOMIC_RMW_XOR_FECTH,
+  ATOMIC_RMW_FETCH_ADD, ATOMIC_RMW_FETCH_SUB, ATOMIC_RMW_FETCH_AND, ATOMIC_RMW_FETCH_NAND,
+  ATOMIC_RMW_FETCH_OR, ATOMIC_RMW_FETCH_XOR
+]> {
+  let cppNamespace = "::mlir::gccjit";
+}
+
+def AtomicLoadOp : GCCJIT_Op<"atomic.load"> {
+  let summary = "Atomic load operation";
+  let description = [{
+    The `gccjit.atomic.load` operation represents an atomic load operation.
+    ```mlir
+    %res = gccjit.atomic.load relaxed (%ptr : !gccjit.ptr<!i32>) : !i32
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$ptr, AtomicOrderingAttr:$ordering);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $ordering `(` $ptr `:` type($ptr) `)` `:` type($result) attr-dict
+  }];
+}
+
+def AtomicRMWOp : GCCJIT_Op<"atomic.rmw"> {
+  let summary = "Atomic rmw operation";
+  let description = [{
+    The `gccjit.atomic.rmw` operation represents an atomic rmw operation.
+    ```mlir
+    %res = gccjit.atomic.rmw relaxed add_fetch (%ptr : !gccjit.ptr<!i32>, %value : !i32) : !i32
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$ptr, AnyType:$value, AtomicRMWKindAttr:$kind, AtomicOrderingAttr:$ordering);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $ordering $kind  `(` $ptr `:` type($ptr) `,` $value `:` type($value) `)` `:` type($result) attr-dict
+  }];
+}
+
+def AtomicCompareExchangeOp : GCCJIT_Op<"atomic.cmpxchg"> {
+  let summary = "Atomic compare exchange operation";
+  let description = [{
+    The `gccjit.atomic.cmpxchg` operation represents an atomic compare exchange operation.
+    ```mlir
+    %res = gccjit.atomic.cmpxchg weak success(acq_rel) failure(relaxed) 
+      (%ptr : !gccjit.ptr<!i32>, %expected : !gccjit.ptr<!i32>, %desired : !i32) : !i1
+    ```
+  }];
+  let arguments = (ins 
+    GCCJIT_PointerType:$ptr, 
+    GCCJIT_PointerType:$expected, 
+    AnyType:$desired, 
+    AtomicOrderingAttr:$success_ord, 
+    AtomicOrderingAttr:$failure_ord, 
+    UnitAttr:$weak);
+  let results = (outs GCCJIT_BoolType:$result);
+  let assemblyFormat = [{
+    custom<WeakAttr>($weak)
+    `success` `(` $success_ord `)` 
+    `failure` `(` $failure_ord `)`
+    `(` $ptr `:` type($ptr) `,` $expected `:` type($expected) `,` $desired `:` type($desired) `)` `:` type($result) attr-dict
+  }];
+}
+
+
 #endif // GCCJIT_OPS
