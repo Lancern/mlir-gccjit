@@ -1,19 +1,22 @@
 include_guard(GLOBAL)
 
-set(GCCJIT_DIRECTORY "" CACHE PATH "Path to GCCJIT installation")
+set(GCCJIT_ROOT "" CACHE PATH "Path to GCCJIT installation")
 set(GCCJIT_INCLUDE_DIR "" CACHE PATH "Path to GCCJIT include directory")
 
-if (GCCJIT_DIRECTORY)
-    message(STATUS "Using GCCJIT from ${GCCJIT_DIRECTORY}")
+if (GCCJIT_ROOT)
+    message(STATUS "Using GCCJIT from ${GCCJIT_ROOT}")
 
     if (NOT GCCJIT_INCLUDE_DIR)
-        set(GCCJIT_INCLUDE_DIR ${GCCJIT_DIRECTORY}/include)
+        set(GCCJIT_INCLUDE_DIR ${GCCJIT_ROOT}/include)
     endif ()
 
-    set(GCCJIT_LIB_DIRS ${GCCJIT_DIRECTORY})
-    if (EXISTS ${GCCJIT_DIRECTORY}/lib)
-        list(APPEND GCCJIT_LIB_DIRS ${GCCJIT_DIRECTORY}/lib)
+    set(GCCJIT_LIB_DIRS ${GCCJIT_ROOT})
+    if (EXISTS ${GCCJIT_ROOT}/lib)
+        list(APPEND GCCJIT_LIB_DIRS ${GCCJIT_ROOT}/lib)
     endif()
+    if (EXISTS ${GCCJIT_ROOT}/lib/gcc/current)
+        list(APPEND GCCJIT_LIB_DIRS ${GCCJIT_ROOT}/lib/gcc/current)
+    endif ()
 endif ()
 
 if (GCCJIT_INCLUDE_DIR)
