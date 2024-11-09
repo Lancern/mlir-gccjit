@@ -27,7 +27,8 @@ class GCCJIT_UnitAttr<string name, string attrMnemonic, list<Trait> traits = []>
 //===----------------------------------------------------------------------===//
 
 def TLSModel_None : I32EnumAttrCase<"None", 0, "none">;
-def TLSModel_GlobalDynamic : I32EnumAttrCase<"GlobalDynamic", 1, "global_dynamic">;
+def TLSModel_GlobalDynamic : I32EnumAttrCase<"GlobalDynamic", 1,
+                                             "global_dynamic">;
 def TLSModel_LocalDynamic : I32EnumAttrCase<"LocalDynamic", 2, "local_dynamic">;
 def TLSModel_InitialExec : I32EnumAttrCase<"InitialExec", 3, "initial_exec">;
 def TLSModel_LocalExec : I32EnumAttrCase<"LocalExec", 4, "local_exec">;
@@ -48,10 +49,18 @@ def TLSModelAttr : GCCJIT_Attr<"TLSModel", "tls_model"> {
   let hasCustomAssemblyFormat = 1;
   let extraClassDeclaration = [{
     bool isNone() const { return getModel().getValue() == TLSModelEnum::None; }
-    bool isGlobalDynamic() const { return getModel().getValue() == TLSModelEnum::GlobalDynamic; }
-    bool isLocalDynamic() const { return getModel().getValue() == TLSModelEnum::LocalDynamic; }
-    bool isInitialExec() const { return getModel().getValue() == TLSModelEnum::InitialExec; }
-    bool isLocalExec() const { return getModel().getValue() == TLSModelEnum::LocalExec; }
+    bool isGlobalDynamic() const {
+      return getModel().getValue() == TLSModelEnum::GlobalDynamic;
+    }
+    bool isLocalDynamic() const {
+      return getModel().getValue() == TLSModelEnum::LocalDynamic;
+    }
+    bool isInitialExec() const {
+      return getModel().getValue() == TLSModelEnum::InitialExec;
+    }
+    bool isLocalExec() const {
+      return getModel().getValue() == TLSModelEnum::LocalExec;
+    }
   }];
   let genVerifyDecl = 0;
 }
@@ -192,7 +201,8 @@ def FieldAttr : GCCJIT_Attr<"Field", "field"> {
     }]>,
   ];
 
-  // attribute can eat up the `:` separator, so we need to move the name to the front
+  // attribute can eat up the `:` separator, so we need to move the name to the
+  // front
   let assemblyFormat = [{
     `<` $name $type  (`:` $bitWidth^)? ($loc^)? `>`
   }];
@@ -246,7 +256,8 @@ def FnAttrEnum : I32EnumAttr<"FnAttrEnum", "Function attribute",
                           [FnAttr_Alias, FnAttr_AlwaysInline, FnAttr_Inline,
                            FnAttr_NoInline, FnAttr_Target, FnAttr_Used,
                            FnAttr_Visibility, FnAttr_Cold, FnAttr_ReturnsTwice,
-                           FnAttr_Pure, FnAttr_Const, FnAttr_Weak, FnAttr_Nonnull]> {
+                           FnAttr_Pure, FnAttr_Const, FnAttr_Weak,
+                           FnAttr_Nonnull]> {
   let cppNamespace = "mlir::gccjit";
 }
 
@@ -273,7 +284,8 @@ def FnAttr : GCCJIT_Attr<"Function", "fn_attr"> {
 //===----------------------------------------------------------------------===//
 // ByteArrayInitializer Attr
 //===----------------------------------------------------------------------===//
-def ByteArrayInitializerAttr : GCCJIT_Attr<"ByteArrayInitializer", "byte_array"> {
+def ByteArrayInitializerAttr : GCCJIT_Attr<"ByteArrayInitializer",
+                                           "byte_array"> {
   let summary = "Byte array initializer";
   let parameters = (ins "DenseI8ArrayAttr":$initializer);
   let description = [{

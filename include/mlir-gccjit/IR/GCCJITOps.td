@@ -78,7 +78,9 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
     ArrayRef<Type> getArgumentTypes() { return getFunctionType().getInputs(); }
 
     /// Returns the result types of this function.
-    ArrayRef<Type> getResultTypes() { return getFunctionType().getReturnTypes(); }
+    ArrayRef<Type> getResultTypes() {
+      return getFunctionType().getReturnTypes();
+    }
 
     /// Returns nymber of arguments to the function.
     unsigned getNumArguments() { return getFunctionType().getNumInputs(); }
@@ -94,7 +96,8 @@ def FuncOp : GCCJIT_Op<"func", [IsolatedFromAbove]> {
 //===----------------------------------------------------------------------===//
 // ReturnOp
 //===----------------------------------------------------------------------===//
-def ReturnOp : GCCJIT_Op<"return", [Terminator, ReturnLike, ParentOneOf<["FuncOp", "GlobalOp", "ExprOp"]>]> {
+def ReturnOp : GCCJIT_Op<"return",
+    [Terminator, ReturnLike, ParentOneOf<["FuncOp", "GlobalOp", "ExprOp"]>]> {
   let summary = "Return from function";
   let description = [{
     The "return" operation represents a return operation within a function.
@@ -155,7 +158,8 @@ def JumpOp : GCCJIT_Op<"jump", [
     ```
     goto target;
     ```
-    Unlike other branch op in MLIR, this jump op does not support any block arguments.
+    Unlike other branch op in MLIR, this jump op does not support any block
+    arguments.
   }];
   let successors = (successor AnySuccessor:$dest);
   let assemblyFormat = [{
@@ -173,15 +177,19 @@ def ConditionalOp : GCCJIT_Op<"conditional", [
 ]> {
   let summary = "Unconditional jump";
   let description = [{
-    Terminate a block by adding evaluation of an rvalue, branching on the result to the appropriate successor block.
-    This is roughly equivalent to this C code:
+    Terminate a block by adding evaluation of an rvalue, branching on the result
+    to the appropriate successor block. This is roughly equivalent to this C
+    code:
+
     ```
     if (boolval)
       goto on_true;
     else
       goto on_false;
     ```
-    Unlike other branch op in MLIR, this conditional op does not support any block arguments.
+
+    Unlike other branch op in MLIR, this conditional op does not support any
+    block arguments.
   }];
   let arguments = (ins GCCJIT_BoolType:$condition);
   let successors = (successor AnySuccessor:$on_true, AnySuccessor:$on_false);
@@ -202,7 +210,7 @@ def AsRValueOp : GCCJIT_Op<"as_rvalue"> {
   let arguments = (ins GCCJIT_LValueType:$lvalue);
   let results = (outs AnyType:$rvalue);
   let assemblyFormat = [{
-      $lvalue `:` type($lvalue) `to` type($rvalue) attr-dict
+    $lvalue `:` type($lvalue) `to` type($rvalue) attr-dict
   }];
   let hasVerifier = 1;
 }
@@ -210,7 +218,8 @@ def AsRValueOp : GCCJIT_Op<"as_rvalue"> {
 //===----------------------------------------------------------------------===//
 // SwitchOp
 //===----------------------------------------------------------------------===//
-def SwitchOp : GCCJIT_Op<"switch", [Terminator, Pure, ParentOneOf<["FuncOp"]>]> {
+def SwitchOp : GCCJIT_Op<"switch",
+    [Terminator, Pure, ParentOneOf<["FuncOp"]>]> {
   let summary = "Switch operation";
   let description = [{
     The "switch" operation represents a switch operation within a block.
@@ -335,8 +344,8 @@ def ExprOp : GCCJIT_Op<"expr"> {
       %2 = gccjit.binary plus %0, %1 : !gccjit.int<32>, !gccjit.int<32>
       gccjit.return %2 : !gccjit.int<32>
     } : !gccjit.int<32>
-    The expr operation can be marked with a lazy attribute. If such an attribute exists,
-    the expr will not be materialized until it is used.
+    The expr operation can be marked with a lazy attribute. If such an attribute
+    exists, the expr will not be materialized until it is used.
     ```
   }];
   let arguments = (ins UnitAttr:$lazy);
@@ -393,7 +402,11 @@ def NewArrayOp : GCCJIT_Op<"new_array"> {
   let arguments = (ins Variadic<AnyType>:$elements);
   let results = (outs GCCJIT_ArrayType:$array);
   let assemblyFormat = [{
-     type($array) `[` custom<ArrayOrVectorElements>(ref(type($array)), $elements, type($elements)) `]` attr-dict
+    type($array) `[`
+      custom<ArrayOrVectorElements>(
+        ref(type($array)), $elements, type($elements)
+      )
+    `]` attr-dict
   }];
 }
 
@@ -401,9 +414,11 @@ def NewStructOp : GCCJIT_Op<"new_struct"> {
   let summary = "Construct a struct";
   let description = [{
     The "struct" operation constructs a struct from a list of elements.
-    Each value has to have the same unqualified type as the field it is applied to.
+    Each value has to have the same unqualified type as the field it is applied
+    to.
+
     ```mlir
-    %struct = gccjit.new_struct [0, 1] [%1, %2] : (!i32, !i32) -> !gccjit.struct<(!i32, !i32)>
+    %0 = gccjit.new_struct [0, 1] [%1, %2] : (!i32, !i32) -> !gccjit.struct<(!i32, !i32)>
     ```
   }];
   let arguments = (ins 
@@ -421,7 +436,8 @@ def NewUnionOp : GCCJIT_Op<"new_union"> {
   let summary = "Construct a union";
   let description = [{
     The "union" operation constructs a union from a list of elements.
-    Each value has to have the same unqualified type as the field it is applied to.
+    Each value has to have the same unqualified type as the field it is applied
+    to.
     ```mlir
     %union = gccjit.new_union %1 at 0 : !i32, !gccjit.union<(!i32)> 
     ```
@@ -447,7 +463,13 @@ def NewVectorOp : GCCJIT_Op<"new_vector"> {
   let arguments = (ins Variadic<AnyType>:$elements);
   let results = (outs GCCJIT_VectorType:$vector);
   let assemblyFormat = [{
-     type($vector) `[` custom<ArrayOrVectorElements>(ref(type($vector)), $elements, type($elements)) `]` attr-dict
+    type($vector) `[`
+      custom<ArrayOrVectorElements>(
+        ref(type($vector)),
+        $elements,
+        type($elements)
+      )
+    `]` attr-dict
   }];
 }
 
@@ -509,6 +531,7 @@ def BinaryOp : GCCJIT_Op<"binary"> {
   let summary = "Binary operation";
   let description = [{
     The "binary" operation represents a binary operation.
+
     ```mlir
     %res = gccjit.binary plus ( %lhs : !gccjit.int<i32>, %rhs : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
@@ -516,7 +539,8 @@ def BinaryOp : GCCJIT_Op<"binary"> {
   let arguments = (ins BOpAttr:$op, AnyType:$lhs, AnyType:$rhs);
   let results = (outs AnyType:$result);
   let assemblyFormat = [{
-    $op `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` `:` type($result) attr-dict
+    $op `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)`
+    `:` type($result) attr-dict
   }];
 }
 
@@ -540,6 +564,7 @@ def CompareOp : GCCJIT_Op<"compare"> {
   let summary = "Comparison operation";
   let description = [{
     The "compare" operation represents a comparison operation.
+
     ```mlir
     %res = gccjit.compare eq ( %lhs : !gccjit.int<i32>, %rhs : !gccjit.int<i32> ) : !gccjit.bool
     ```
@@ -547,7 +572,8 @@ def CompareOp : GCCJIT_Op<"compare"> {
   let arguments = (ins CmpOpAttr:$op, AnyType:$lhs, AnyType:$rhs);
   let results = (outs GCCJIT_BoolType:$result);
   let assemblyFormat = [{
-    $op `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)` `:` type($result) attr-dict
+    $op `(` $lhs `:` type($lhs) `,` $rhs `:` type($rhs) `)`
+    `:` type($result) attr-dict
   }];
 }
 
@@ -558,10 +584,13 @@ def CallOp : GCCJIT_Op<"call"> {
   let summary = "Function call";
   let description = [{
     The "call" operation represents a function call.
+
     ```mlir
     %res = gccjit.call @foo ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
+
     If tail call is required, the `tail` attribute should be set to true.
+
     ```mlir
     %res = gccjit.call tail @foo ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
@@ -583,10 +612,13 @@ def PtrCallOp : GCCJIT_Op<"ptr_call"> {
   let summary = "Function pointer call";
   let description = [{
     The "ptr_call" operation represents a function pointer call.
+
     ```mlir
     %res = gccjit.ptr_call %fn ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
+
     If tail call is required, the `tail` attribute should be set to true.
+
     ```mlir
     %res = gccjit.ptr_call tail %fn ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
@@ -606,9 +638,11 @@ def CastOp : GCCJIT_Op<"cast"> {
   let summary = "Cast operation";
   let description = [{
     The "cast" operation represents a casting operation.
+
     ```mlir
     %res = gccjit.cast %value : !gccjit.int<i32> to !gccjit.int<i64>
     ```
+
     Currently only a limited set of conversions are possible:
     - `int <-> float`
     - `int <-> pointer`
@@ -629,6 +663,7 @@ def BitCastOp : GCCJIT_Op<"bitcast"> {
     the bits of rvalue to the layout of type.
 
     The type of rvalue must be the same size as the size of type.
+
     ```mlir
     %res = gccjit.bitcast %value : !gccjit.int<long> to !gccjit.int<unsigned long>
     ```
@@ -666,6 +701,7 @@ def AddrOp : GCCJIT_Op<"addr"> {
   let summary = "Address of an lvalue";
   let description = [{
     The "addr" operation returns the address of an lvalue.
+
     ```mlir
     %res = gccjit.addr (%lvalue : !gccjit.lvalue<!i32>) : !gccjit.ptr<!i32>
     ```
@@ -684,6 +720,7 @@ def FnAddrOp : GCCJIT_Op<"fn_addr"> {
   let summary = "Function address";
   let description = [{
     The "fn_addr" operation returns the address of a function.
+
     ```mlir
     %res = gccjit.fn_addr @foo : !gccjit.ptr<!gccjit.func<void (!i32)>>
     ```
@@ -702,6 +739,7 @@ def DerefOp : GCCJIT_Op<"deref"> {
   let summary = "Dereference a pointer";
   let description = [{
     The "deref" operation dereferences a pointer.
+
     ```mlir
     %res = gccjit.deref (%ptr : !gccjit.ptr<!i32>) : !gccjit.lvalue<!i32>
     ```
@@ -709,7 +747,8 @@ def DerefOp : GCCJIT_Op<"deref"> {
   let arguments = (ins GCCJIT_PointerType:$ptr, Optional<GCCJIT_IntType>:$offset);
   let results = (outs GCCJIT_LValueType:$result);
   let assemblyFormat = [{
-    `(` $ptr `:` type($ptr) (`,` $offset^ `:` type($offset) )? `)` `:` type($result) attr-dict
+    `(` $ptr `:` type($ptr) (`,` $offset^ `:` type($offset) )? `)`
+    `:` type($result) attr-dict
   }];
 }
 
@@ -720,6 +759,7 @@ def AssignOp : GCCJIT_Op<"assign"> {
   let summary = "Assignment operation";
   let description = [{
     The "assign" operation represents an assignment operation.
+
     ```mlir
     gccjit.assign %rvalue to $lvalue : !gccjit.lvalue<!i32>, !i32
     ```
@@ -737,6 +777,7 @@ def UpdateOp : GCCJIT_Op<"update"> {
   let summary = "Update operation";
   let description = [{
     The "update" operation represents an update operation.
+
     ```mlir
     gccjit.update minus %rvalue to $lvalue : !gccjit.lvalue<!i32>, !i32
     ```
@@ -754,6 +795,7 @@ def CommentOp : GCCJIT_Op<"comment", [Pure]> {
   let summary = "Comment operation";
   let description = [{
     The "comment" operation represents a comment.
+
     ```mlir
     gccjit.comment #gccjit.str<"This is a comment">
     ```
@@ -773,6 +815,7 @@ def AccessFieldOp : GCCJIT_Op<"access_field"> {
     The "access_field" operation represents an access field operation.
     LValue field access returns an lvalue.
     RValue field access returns an rvalue.
+
     ```mlir
     %res0 = gccjit.access_field %struct [0] : !gccjit.lvalue<!gccjit.struct<(!i32, !i32)>> -> !gccjit.lvalue<!i32>
     %res1 = gccjit.access_field %struct [1] : !gccjit.struct<(!i32, !i32)> -> !i32
@@ -792,6 +835,7 @@ def DerefFieldOp : GCCJIT_Op<"deref_field"> {
   let summary = "Dereference field operation";
   let description = [{
     The "deref_field" operation represents a dereference field operation.
+
     ```mlir
     %res = gccjit.deref_field %ptr [0] : !gccjit.ptr<!gccjit.struct<(!i32, !i32)>> -> !gccjit.lvalue<!i32>
     ```
@@ -810,6 +854,7 @@ def GetGlobalOp : GCCJIT_Op<"get_global"> {
   let summary = "Get global operation";
   let description = [{
     The "get_global" operation is used to get a lvalue of a global variable.
+
     ```mlir
     %res = gccjit.get_global @foo : !gccjit.lvalue<!i32>
     ```
@@ -828,6 +873,7 @@ def AsmOp : GCCJIT_Op<"asm", [AttrSizedOperandSegments]> {
   let summary = "Inline assembly operation";
   let description = [{
     The "asm" operation represents an inline assembly operation.
+
     ```mlir
     gccjit.asm inline volatile ("..." 
       : "=r"(%result) 
@@ -853,8 +899,10 @@ def AsmOp : GCCJIT_Op<"asm", [AttrSizedOperandSegments]> {
     custom<AsmVolatileAttr>($volatile_flag)
     `(` 
        $template_code
-      `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs, type($outputs))
-      `:` custom<AsmOperands>($inputConstraints, $inputSymbols, $inputs, type($inputs))
+      `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs,
+                              type($outputs))
+      `:` custom<AsmOperands>($inputConstraints, $inputSymbols, $inputs,
+                              type($inputs))
       `:` custom<ClobberList>($clobbers)
     `)` attr-dict
   }];
@@ -863,10 +911,12 @@ def AsmOp : GCCJIT_Op<"asm", [AttrSizedOperandSegments]> {
 ///===----------------------------------------------------------------------===//
 /// AsmGotoOp
 ///===----------------------------------------------------------------------===//
-def AsmGotoOp : GCCJIT_Op<"asm_goto", [Terminator, ParentOneOf<["FuncOp"]>, AttrSizedOperandSegments]> {
+def AsmGotoOp : GCCJIT_Op<"asm_goto",
+    [Terminator, ParentOneOf<["FuncOp"]>, AttrSizedOperandSegments]> {
   let summary = "Inline assembly operation";
   let description = [{
     The "asm" operation represents an inline assembly operation.
+
     ```mlir
     gccjit.asm_goto inline volatile ("..." 
       : "=r"(%result) 
@@ -889,14 +939,17 @@ def AsmGotoOp : GCCJIT_Op<"asm_goto", [Terminator, ParentOneOf<["FuncOp"]>, Attr
     Variadic<AnyType>:$inputs,
     ArrayAttr:$clobbers
   );
-  let successors = (successor AnySuccessor:$fallthrough, VariadicSuccessor<AnySuccessor>:$labels);
+  let successors = (successor AnySuccessor:$fallthrough,
+                              VariadicSuccessor<AnySuccessor>:$labels);
   let assemblyFormat = [{
     custom<AsmInlineAttr>($inline_flag)
     custom<AsmVolatileAttr>($volatile_flag)
     `(` 
        $template_code
-      `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs, type($outputs))
-      `:` custom<AsmOperands>($inputConstraints, $inputSymbols, $inputs, type($inputs))
+      `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs,
+                              type($outputs))
+      `:` custom<AsmOperands>($inputConstraints, $inputSymbols, $inputs,
+                              type($inputs))
       `:` custom<ClobberList>($clobbers)
       `:` $labels
       `:` $fallthrough
@@ -923,12 +976,12 @@ def AtomicOrderingAttr : I32EnumAttr<"AtomicOrdering", "atomic ordering", [
 
 def ATOMIC_RMW_STORE : I32EnumAttrCase<"Store", 0, "store">;
 def ATOMIC_RMW_XCHG : I32EnumAttrCase<"Xchg", 1, "xchg">;
-def ATOMIC_RMW_ADD_FECTH : I32EnumAttrCase<"AddFetch", 2, "add_fetch">;
-def ATOMIC_RMW_SUB_FECTH : I32EnumAttrCase<"SubFetch", 3, "sub_fetch">;
-def ATOMIC_RMW_AND_FECTH : I32EnumAttrCase<"AndFetch", 4, "and_fetch">;
-def ATOMIC_RMW_NAND_FECTH : I32EnumAttrCase<"NandFetch", 5, "nand_fetch">;
-def ATOMIC_RMW_OR_FECTH : I32EnumAttrCase<"OrFetch", 6, "or_fetch">;
-def ATOMIC_RMW_XOR_FECTH : I32EnumAttrCase<"XorFetch", 7, "xor_fetch">;
+def ATOMIC_RMW_ADD_FETCH : I32EnumAttrCase<"AddFetch", 2, "add_fetch">;
+def ATOMIC_RMW_SUB_FETCH : I32EnumAttrCase<"SubFetch", 3, "sub_fetch">;
+def ATOMIC_RMW_AND_FETCH : I32EnumAttrCase<"AndFetch", 4, "and_fetch">;
+def ATOMIC_RMW_NAND_FETCH : I32EnumAttrCase<"NandFetch", 5, "nand_fetch">;
+def ATOMIC_RMW_OR_FETCH : I32EnumAttrCase<"OrFetch", 6, "or_fetch">;
+def ATOMIC_RMW_XOR_FETCH : I32EnumAttrCase<"XorFetch", 7, "xor_fetch">;
 def ATOMIC_RMW_FETCH_ADD : I32EnumAttrCase<"FetchAdd", 8, "fetch_add">;
 def ATOMIC_RMW_FETCH_SUB : I32EnumAttrCase<"FetchSub", 9, "fetch_sub">;
 def ATOMIC_RMW_FETCH_AND : I32EnumAttrCase<"FetchAnd", 10, "fetch_and">;
@@ -937,10 +990,11 @@ def ATOMIC_RMW_FETCH_OR : I32EnumAttrCase<"FetchOr", 12, "fetch_or">;
 def ATOMIC_RMW_FETCH_XOR : I32EnumAttrCase<"FetchXor", 13, "fetch_xor">;
 
 def AtomicRMWKindAttr : I32EnumAttr<"AtomicRMWKind", "atomic rmw operation", [
-  ATOMIC_RMW_STORE, ATOMIC_RMW_XCHG, ATOMIC_RMW_ADD_FECTH, ATOMIC_RMW_SUB_FECTH,
-  ATOMIC_RMW_AND_FECTH, ATOMIC_RMW_NAND_FECTH, ATOMIC_RMW_OR_FECTH, ATOMIC_RMW_XOR_FECTH,
-  ATOMIC_RMW_FETCH_ADD, ATOMIC_RMW_FETCH_SUB, ATOMIC_RMW_FETCH_AND, ATOMIC_RMW_FETCH_NAND,
-  ATOMIC_RMW_FETCH_OR, ATOMIC_RMW_FETCH_XOR
+  ATOMIC_RMW_STORE, ATOMIC_RMW_XCHG, ATOMIC_RMW_ADD_FETCH, ATOMIC_RMW_SUB_FETCH,
+  ATOMIC_RMW_AND_FETCH, ATOMIC_RMW_NAND_FETCH, ATOMIC_RMW_OR_FETCH,
+  ATOMIC_RMW_XOR_FETCH, ATOMIC_RMW_FETCH_ADD, ATOMIC_RMW_FETCH_SUB,
+  ATOMIC_RMW_FETCH_AND, ATOMIC_RMW_FETCH_NAND, ATOMIC_RMW_FETCH_OR,
+  ATOMIC_RMW_FETCH_XOR
 ]> {
   let cppNamespace = "::mlir::gccjit";
 }
@@ -949,6 +1003,7 @@ def AtomicLoadOp : GCCJIT_Op<"atomic.load"> {
   let summary = "Atomic load operation";
   let description = [{
     The `gccjit.atomic.load` operation represents an atomic load operation.
+
     ```mlir
     %res = gccjit.atomic.load relaxed (%ptr : !gccjit.ptr<!i32>) : !i32
     ```
@@ -964,6 +1019,7 @@ def AtomicRMWOp : GCCJIT_Op<"atomic.rmw"> {
   let summary = "Atomic rmw operation";
   let description = [{
     The `gccjit.atomic.rmw` operation represents an atomic rmw operation.
+
     ```mlir
     %res = gccjit.atomic.rmw relaxed add_fetch (%ptr : !gccjit.ptr<!i32>, %value : !i32) : !i32
     ```
@@ -971,7 +1027,8 @@ def AtomicRMWOp : GCCJIT_Op<"atomic.rmw"> {
   let arguments = (ins GCCJIT_PointerType:$ptr, AnyType:$value, AtomicRMWKindAttr:$kind, AtomicOrderingAttr:$ordering);
   let results = (outs AnyType:$result);
   let assemblyFormat = [{
-    $ordering $kind  `(` $ptr `:` type($ptr) `,` $value `:` type($value) `)` `:` type($result) attr-dict
+    $ordering $kind  `(` $ptr `:` type($ptr) `,` $value `:` type($value) `)`
+    `:` type($result) attr-dict
   }];
 }
 
@@ -979,6 +1036,7 @@ def AtomicCompareExchangeOp : GCCJIT_Op<"atomic.cmpxchg"> {
   let summary = "Atomic compare exchange operation";
   let description = [{
     The `gccjit.atomic.cmpxchg` operation represents an atomic compare exchange operation.
+
     ```mlir
     %res = gccjit.atomic.cmpxchg weak success(acq_rel) failure(relaxed) 
       (%ptr : !gccjit.ptr<!i32>, %expected : !gccjit.ptr<!i32>, %desired : !i32) : !i1
@@ -996,9 +1054,12 @@ def AtomicCompareExchangeOp : GCCJIT_Op<"atomic.cmpxchg"> {
     custom<WeakAttr>($weak)
     `success` `(` $success_ord `)` 
     `failure` `(` $failure_ord `)`
-    `(` $ptr `:` type($ptr) `,` $expected `:` type($expected) `,` $desired `:` type($desired) `)` `:` type($result) attr-dict
+    `(`
+      $ptr `:` type($ptr) `,`
+      $expected `:` type($expected) `,`
+      $desired `:` type($desired)
+    `)` `:` type($result) attr-dict
   }];
 }
-
 
 #endif // GCCJIT_OPS

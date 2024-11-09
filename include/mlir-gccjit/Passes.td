@@ -20,10 +20,16 @@ include "mlir/Pass/PassBase.td"
 def ConvertFuncToGCCJIT : Pass<"convert-func-to-gccjit", "::mlir::ModuleOp"> {
   let summary = "Convert Functions and control flows to GCCJIT Dialect";
   let description = [{
-    This pass converts function operations and control flow operations to GCCJIT dialect.
+    This pass converts function operations and control flow operations to GCCJIT
+    dialect.
   }];
   let constructor = "::mlir::gccjit::createConvertFuncToGCCJITPass()";
-  let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::func::FuncDialect", "::mlir::BuiltinDialect", "::mlir::cf::ControlFlowDialect"];
+  let dependentDialects = [
+    "::mlir::gccjit::GCCJITDialect",
+    "::mlir::func::FuncDialect",
+    "::mlir::BuiltinDialect",
+    "::mlir::cf::ControlFlowDialect"
+  ];
 }
 
 def ConvertArithToGCCJIT : Pass<"convert-arith-to-gccjit", "::mlir::ModuleOp"> {
@@ -32,16 +38,23 @@ def ConvertArithToGCCJIT : Pass<"convert-arith-to-gccjit", "::mlir::ModuleOp"> {
     `-convert-arith-to-gccjit` converts arithmetic operations to GCCJIT dialect.
   }];
   let constructor = "::mlir::gccjit::createConvertArithToGCCJITPass()";
-let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::arith::ArithDialect"];
+  let dependentDialects = [
+    "::mlir::gccjit::GCCJITDialect",
+    "::mlir::arith::ArithDialect"
+  ];
 }
 
-def ConvertMemrefToGCCJIT : Pass<"convert-memref-to-gccjit", "::mlir::ModuleOp"> {
+def ConvertMemrefToGCCJIT : Pass<"convert-memref-to-gccjit",
+                                 "::mlir::ModuleOp"> {
   let summary = "Convert Memref Operations to GCCJIT Dialect";
   let description = [{
     `-convert-memref-to-gccjit` converts memref operations to GCCJIT dialect.
   }];
   let constructor = "::mlir::gccjit::createConvertMemrefToGCCJITPass()";
-  let dependentDialects = ["::mlir::gccjit::GCCJITDialect", "::mlir::memref::MemRefDialect"];
+  let dependentDialects = [
+    "::mlir::gccjit::GCCJITDialect",
+    "::mlir::memref::MemRefDialect"
+  ];
 }
 
 #endif // MLIR_GCCJIT_PASSES

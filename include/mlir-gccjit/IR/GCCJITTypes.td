@@ -38,8 +38,8 @@ def GCCJIT_LValueType : GCCJIT_Type<"LValue", "lvalue"> {
 def GCCJIT_FuncType : GCCJIT_Type<"Func", "func"> {
   let summary = "GCCJIT function type";
   let description = [{
-    The `!gccjit.func` is a function type. It consists of a single return type, a
-    list of parameter types and can optionally be variadic.
+    The `!gccjit.func` is a function type. It consists of a single return type,
+    a list of parameter types and can optionally be variadic.
   }];
 
   let parameters = (ins ArrayRefParameter<"Type">:$inputs, "Type":$returnType,
@@ -143,7 +143,8 @@ def GCCJIT_IntType : GCCJIT_Type<"Int", "int"> {
 class SpecificInt<string enumValue>
   : Type<And<[
         CPred<"::mlir::isa<::mlir::gccjit::IntType>($_self)">,
-        CPred<"::mlir::cast<::mlir::gccjit::IntType>($_self).getKind() == " # enumValue>
+        CPred<"::mlir::cast<::mlir::gccjit::IntType>($_self).getKind() == "
+          # enumValue>
         ]>, "integer with " #enumValue, "::mlir::gccjit::IntType">,
     BuildableType<
       "mlir::gccjit::IntType::get($_builder.getContext(), "
