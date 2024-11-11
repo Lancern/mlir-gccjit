@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <llvm/ADT/TypeSwitch.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
 #include <mlir/Dialect/MemRef/IR/MemRef.h>
+#include <mlir/IR/Attributes.h>
 #include <mlir/IR/Builders.h>
+#include <mlir/IR/BuiltinAttributeInterfaces.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/BuiltinTypeInterfaces.h>
@@ -646,28 +649,184 @@ void removeAllAssumeAlignmentOps(ModuleOp moduleOp,
                                  GCCJITTypeConverter *typeConverter,
                                  DominanceInfo &domInfo,
                                  llvm::SmallVectorImpl<Operation *> &ops) {
-  for (auto func : moduleOp.getOps<func::FuncOp>()) {
-    llvm::DenseMap<memref::AssumeAlignmentOp, llvm::SmallVector<OpOperand *>>
-        replacement;
-    func.walk([&](memref::AssumeAlignmentOp op) {
-      for (auto &use : op.getMemref().getUses()) {
-        auto *user = use.getOwner();
-        if (isa<memref::AssumeAlignmentOp>(user))
-          continue;
-        if (domInfo.properlyDominates(op, user))
-          replacement[op].push_back(&use);
-      }
-    });
-    IRRewriter rewriter(func.getContext());
-    rewriter.startOpModification(func);
-    func->walk([&](memref::AssumeAlignmentOp op) {
-      removeAssumeAlignmentOp(op, typeConverter, rewriter, replacement[op]);
-    });
-    rewriter.finalizeOpModification(func);
-    ops.push_back(func);
-    domInfo.invalidate(&func.getFunctionBody());
+  for (auto &operation : moduleOp.getOps()) {
+    if (auto func = dyn_cast<func::FuncOp>(operation)) {
+      llvm::DenseMap<memref::AssumeAlignmentOp, llvm::SmallVector<OpOperand *>>
+          replacement;
+      func.walk([&](memref::AssumeAlignmentOp op) {
+        for (auto &use : op.getMemref().getUses()) {
+          auto *user = use.getOwner();
+          if (isa<memref::AssumeAlignmentOp>(user))
+            continue;
+          if (domInfo.properlyDominates(op, user))
+            replacement[op].push_back(&use);
+        }
+      });
+      IRRewriter rewriter(func.getContext());
+      rewriter.startOpModification(func);
+      func->walk([&](memref::AssumeAlignmentOp op) {
+        removeAssumeAlignmentOp(op, typeConverter, rewriter, replacement[op]);
+      });
+      rewriter.finalizeOpModification(func);
+      domInfo.invalidate(&func.getFunctionBody());
+    }
+    ops.push_back(&operation);
   }
 }
+
+static Type
+convertGlobalMemrefTypeToGCCJIT(MemRefType type,
+                                const GCCJITTypeConverter &typeConverter) {
+  // GCCJIT type for a global memref will be a multi-dimension array. For
+  // declarations or uninitialized global memrefs, we can potentially flatten
+  // this to a 1D array.
+  Type elementType = typeConverter.convertType(type.getElementType());
+  Type arrayTy = elementType;
+  // Shape has the outermost dim at index 0, so need to walk it backwards
+  for (int64_t dim : llvm::reverse(type.getShape()))
+    arrayTy = ArrayType::get(type.getContext(), arrayTy, dim);
+  return arrayTy;
+}
+
+TypedAttr convertArrayElement(TypedAttr attr,
+                              const GCCJITTypeConverter &typeConverter) {
+  return llvm::TypeSwitch<TypedAttr, TypedAttr>(attr)
+      .Case([&](mlir::IntegerAttr attr) {
+        return typeConverter.convertIntegerAttr(attr);
+      })
+      .Case([&](mlir::FloatAttr attr) {
+        return typeConverter.convertFloatAttr(attr);
+      })
+      .Default([&](auto attr) { return attr; });
+}
+
+Value createSplatArray(ArrayRef<int64_t> shape, TypedAttr constant,
+                       OpBuilder &builder, Location loc,
+                       const GCCJITTypeConverter &typeConverter) {
+  constant = convertArrayElement(constant, typeConverter);
+  auto arrayTy = constant.getType();
+  Value result = builder.create<ConstantOp>(loc, constant);
+  for (int64_t dim : llvm::reverse(shape)) {
+    SmallVector<Value> elements(dim, result);
+    arrayTy = ArrayType::get(builder.getContext(), arrayTy, dim);
+    result = builder.create<NewArrayOp>(loc, arrayTy, elements);
+  }
+  return result;
+}
+
+Value createInitializerArray(DenseElementsAttr attr, OpBuilder &builder,
+                             Location loc,
+                             const GCCJITTypeConverter &typeConverter) {
+  if (attr.isSplat()) {
+    auto shape = attr.getType().getShape();
+    return createSplatArray(shape, attr.getSplatValue<TypedAttr>(), builder,
+                            loc, typeConverter);
+  }
+  auto shape = attr.getType().getShape();
+  auto type = typeConverter.convertType(attr.getType().getElementType());
+  SmallVector<Value> elements;
+  for (auto element : attr.getValues<TypedAttr>()) {
+    element = convertArrayElement(element, typeConverter);
+    elements.push_back(builder.create<ConstantOp>(loc, element));
+  }
+  for (int64_t dim : llvm::reverse(shape)) {
+    SmallVector<Value> newElements;
+    type = ArrayType::get(builder.getContext(), type, dim);
+    for (size_t i = 0, e = elements.size(); i < e; i += dim) {
+      newElements.push_back(builder.create<NewArrayOp>(
+          loc, type, ArrayRef(elements).slice(i, dim)));
+    }
+    elements = std::move(newElements);
+  }
+  return elements[0];
+}
+
+template <typename T>
+static LogicalResult
+emitInitializerExpr(Type gccjitType, ElementsAttr attr, OpBuilder &builder,
+                    const GCCJITTypeConverter &typeConverter, Value &result,
+                    T &&reportFailure, Location loc) {
+  auto denseAttr = dyn_cast<DenseElementsAttr>(attr);
+  if (!denseAttr)
+    return reportFailure("only dense elements attributes are supported");
+  result = createInitializerArray(denseAttr, builder, loc, typeConverter);
+  return llvm::success();
+}
+
+struct GlobalOpLowering : public GCCJITLoweringPattern<memref::GlobalOp> {
+  using GCCJITLoweringPattern::GCCJITLoweringPattern;
+
+  LogicalResult
+  matchAndRewrite(memref::GlobalOp global, OpAdaptor adaptor,
+                  ConversionPatternRewriter &rewriter) const override {
+    MemRefType type = global.getType();
+    if (!isConvertibleAndHasIdentityMaps(type, *getTypeConverter()))
+      return failure();
+
+    Type arrayTy = convertGlobalMemrefTypeToGCCJIT(type, *getTypeConverter());
+
+    GlbKind kind = global.isPublic() ? GlbKind::Exported : GlbKind::Internal;
+
+    if (global.isExternal())
+      kind = GlbKind::Imported;
+
+    GlbKindAttr kindAttr = GlbKindAttr::get(rewriter.getContext(), kind);
+
+    if (type.getMemorySpace())
+      return global.emitOpError(
+          "memory space is not supported for global memrefs");
+
+    auto arrayLVTy = LValueType::get(rewriter.getContext(), arrayTy);
+
+    auto newGlobal = rewriter.replaceOpWithNewOp<gccjit::GlobalOp>(
+        global, kindAttr, /* readonly */ global.getConstantAttr(),
+        global.getSymNameAttr(), TypeAttr::get(arrayLVTy),
+        /* reg_name */ nullptr, global.getAlignmentAttr(),
+        /* tls_model */ nullptr,
+        /* link_section */ nullptr, /* visibility */ nullptr,
+        /* initializer*/ nullptr);
+
+    if (!global.isExternal() && !global.isUninitialized()) {
+      if (auto initializer = global.getInitialValue()) {
+        auto *block = rewriter.createBlock(&newGlobal.getRegion());
+        rewriter.setInsertionPointToStart(block);
+        Value value;
+        if (failed(emitInitializerExpr(
+                arrayTy, cast<ElementsAttr>(*initializer), rewriter,
+                *getTypeConverter(), value,
+                [&](const Twine &msg) { return global.emitError(msg); },
+                global.getLoc())))
+          return failure();
+        rewriter.create<gccjit::ReturnOp>(global.getLoc(), value);
+      }
+    }
+    return success();
+  }
+};
+
+struct GetGlobalOpLowering : public AllocationLowering<memref::GetGlobalOp> {
+  using AllocationLowering::AllocationLowering;
+
+  /// Buffer "allocation" for memref.get_global op is getting the address of
+  /// the global variable referenced.
+  void allocateBuffer(ConversionPatternRewriter &rewriter, Location loc,
+                      Value sizeBytes, memref::GetGlobalOp op) const override {
+    MemRefType type = cast<MemRefType>(op.getResult().getType());
+
+    Type arrayTy = convertGlobalMemrefTypeToGCCJIT(type, *getTypeConverter());
+    Type arrayLVTy = LValueType::get(rewriter.getContext(), arrayTy);
+    Type elementType = getTypeConverter()->convertType(type.getElementType());
+    PointerType elementPtrType =
+        PointerType::get(rewriter.getContext(), elementType);
+    auto ptrTy = PointerType::get(rewriter.getContext(), arrayTy);
+    auto getGlobal = rewriter.create<gccjit::GetGlobalOp>(
+        op->getLoc(), arrayLVTy, op.getNameAttr());
+    auto addressOf = rewriter.create<AddrOp>(loc, ptrTy, getGlobal);
+    auto elementAddr =
+        rewriter.create<BitCastOp>(loc, elementPtrType, addressOf);
+    rewriter.create<ReturnOp>(loc, elementAddr);
+  }
+};
 
 void ConvertMemrefToGCCJITPass::runOnOperation() {
   auto moduleOp = getOperation();
@@ -686,8 +845,8 @@ void ConvertMemrefToGCCJITPass::runOnOperation() {
   typeConverter.addSourceMaterialization(materializeAsUnrealizedCast);
   mlir::RewritePatternSet patterns(&getContext());
   patterns.insert<LoadOpLowering, StoreOpLowering, AllocaOpLowering,
-                  AllocOpLowering, DeallocOpLowering>(typeConverter,
-                                                      &getContext());
+                  AllocOpLowering, DeallocOpLowering, GlobalOpLowering,
+                  GetGlobalOpLowering>(typeConverter, &getContext());
   mlir::ConversionTarget target(getContext());
   target.addLegalDialect<gccjit::GCCJITDialect, BuiltinDialect>();
   target.addIllegalDialect<memref::MemRefDialect>();

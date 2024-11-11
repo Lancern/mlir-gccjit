@@ -17,11 +17,11 @@
 #include <libgccjit.h>
 #include <mlir/IR/Attributes.h>
 #include <mlir/IR/BuiltinAttributes.h>
+#include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/MLIRContext.h>
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-#include "mlir/IR/MLIRContext.h"
-#include <mlir/IR/BuiltinTypes.h>
 
 using namespace mlir;
 using namespace mlir::gccjit;
