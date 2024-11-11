@@ -56,10 +56,10 @@ module attributes { gccjit.opt_level = #gccjit.opt_level<O3>, gccjit.cmdline_opt
 		%zero = arith.constant 0.000000e+00 : f32
 
 		%c0 = arith.constant 0 : index
-		%c16 = arith.constant 16 : index
+		%c512 = arith.constant 512 : index
 		%c1 = arith.constant 1 : index
-		%sum = scf.for %arg0 = %c0 to %c16 step %c1 iter_args(%arg1 = %zero) -> f32 {
-			%inner = scf.for %arg2 = %c0 to %c16 step %c1 iter_args(%arg3 = %arg1) -> f32 {
+		%sum = scf.for %arg0 = %c0 to %c512 step %c1 iter_args(%arg1 = %zero) -> f32 {
+			%inner = scf.for %arg2 = %c0 to %c512 step %c1 iter_args(%arg3 = %arg1) -> f32 {
 				%1 = memref.load %0[%arg0, %arg2] : memref<512x512xf32>
 				%2 = arith.addf %arg3, %1 : f32
 				scf.yield %2 : f32
