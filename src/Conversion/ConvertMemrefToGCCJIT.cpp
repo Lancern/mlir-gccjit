@@ -750,7 +750,7 @@ emitInitializerExpr(Type gccjitType, ElementsAttr attr, OpBuilder &builder,
   if (!denseAttr)
     return reportFailure("only dense elements attributes are supported");
   result = createInitializerArray(denseAttr, builder, loc, typeConverter);
-  return llvm::success();
+  return success();
 }
 
 struct GlobalOpLowering : public GCCJITLoweringPattern<memref::GlobalOp> {
