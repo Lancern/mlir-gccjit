@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <limits>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <mlir/Dialect/Func/IR/FuncOps.h>
@@ -554,7 +555,7 @@ struct AllocaOpLowering : public AllocationLowering<memref::AllocaOp> {
 
     if (auto align = op.getAlignment()) {
       auto alignment =
-          createIndexAttrConstant(rewriter, loc, getIndexType(), *align);
+          createIndexAttrConstant(rewriter, loc, getIndexType(), *align * 8);
       alloca =
           rewriter
               .create<CallOp>(loc, getVoidPtrType(),
