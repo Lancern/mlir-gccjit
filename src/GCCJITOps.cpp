@@ -331,6 +331,8 @@ constexpr ParseNamedUnitAttr parseLazyAttribute{"lazy"};
 constexpr PrintNamedUnitAttr printLazyAttribute{"lazy"};
 constexpr ParseNamedUnitAttr parseWeakAttr{"weak"};
 constexpr PrintNamedUnitAttr printWeakAttr{"weak"};
+constexpr ParseNamedUnitAttr parseReadOnlyAttr{"readonly"};
+constexpr PrintNamedUnitAttr printReadOnlyAttr{"readonly"};
 
 ParseResult
 parseAsmOperands(OpAsmParser &parser, ArrayAttr &constrains, ArrayAttr &symbols,

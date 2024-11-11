@@ -305,6 +305,7 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
   }];
   let arguments = (ins 
     GlbKind:$glb_kind,
+    UnitAttr:$readonly,
     SymbolNameAttr:$sym_name,
     TypeAttrOf<GCCJIT_LValueType>:$type,
     OptionalAttr<StrAttr>:$reg_name,
@@ -317,6 +318,7 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
   let regions = (region AnyRegion:$body);
   let assemblyFormat = [{
     $glb_kind
+    custom<ReadOnlyAttr>($readonly)
     $sym_name
     oilist ( 
       `reg` `(` qualified($reg_name) `)` |

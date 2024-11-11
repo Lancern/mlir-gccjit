@@ -15,15 +15,14 @@
 #ifndef MLIR_GCCJIT_CONVERSION_TYPECONVERTER_H
 #define MLIR_GCCJIT_CONVERSION_TYPECONVERTER_H
 
-#include <libgccjit.h>
 #include <mlir/IR/BuiltinAttributes.h>
 #include <mlir/IR/BuiltinTypes.h>
+#include <mlir/IR/MLIRContext.h>
 #include <mlir/IR/TypeRange.h>
 #include <mlir/Transforms/DialectConversion.h>
 
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITTypes.h"
-#include "mlir/IR/MLIRContext.h"
 
 namespace mlir::gccjit {
 class GCCJITTypeConverter : public TypeConverter {

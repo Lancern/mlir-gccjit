@@ -377,6 +377,14 @@ void GCCJITTranslation::declareAllFunctionAndGlobals() {
       gcc_jit_lvalue_add_string_attribute(globalHandle,
                                           GCC_JIT_VARIABLE_ATTRIBUTE_VISIBILITY,
                                           visibility->str().c_str());
+
+    if ([[maybe_unused]] auto readonly = global.getReadonly()) {
+#ifdef LIBGCCJIT_HAVE_gcc_jit_global_set_readonly
+      gcc_jit_global_set_readonly(globalHandle);
+#else
+      llvm_unreachable("gcc_jit_global_set_readonly is not available");
+#endif
+    }
     if (auto initializer = global.getInitializer()) {
       llvm::TypeSwitch<Attribute>(*initializer)
           .Case([&](StringAttr attr) {
