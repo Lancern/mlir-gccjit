@@ -131,9 +131,13 @@ void IntAttr::print(AsmPrinter &printer) const {
 //===----------------------------------------------------------------------===//
 
 Attribute FloatAttr::parse(AsmParser &parser, Type odsType) {
-  auto floatType = mlir::dyn_cast<FloatType>(odsType);
-  if (!floatType)
+  auto floatType = mlir::dyn_cast_if_present<FloatType>(odsType);
+  if (!floatType) {
+    parser.emitError(
+        parser.getCurrentLocation(),
+        "expected floating-point type for #gccjit.float attribute");
     return {};
+  }
 
   // Consume the '<' symbol.
   if (parser.parseLess())

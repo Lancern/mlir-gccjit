@@ -34,7 +34,6 @@
 #include <mlir/Transforms/DialectConversion.h>
 
 #include "libgccjit.h"
-#include "mlir-gccjit/Conversion/Conversions.h"
 #include "mlir-gccjit/Conversion/TypeConverter.h"
 #include "mlir-gccjit/IR/GCCJITAttrs.h"
 #include "mlir-gccjit/IR/GCCJITOps.h"

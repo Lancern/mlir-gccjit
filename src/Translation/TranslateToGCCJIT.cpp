@@ -108,6 +108,7 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(FnAddrOp op);
   gcc_jit_rvalue *visitExprWithoutCache(NewStructOp op);
   gcc_jit_rvalue *visitExprWithoutCache(NewArrayOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(NewUnionOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
   Expr visitExprWithoutCache(ExprOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
@@ -439,8 +440,9 @@ RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
         return WalkResult::skip();
       }
 
-      // lvalue expressions are never materialized
-      if (isa<LValueType>(op->getResult(0).getType()) && !isa<LocalOp>(op))
+      // lvalue/void expressions are never materialized
+      if (isa<LValueType, VoidType>(op->getResult(0).getType()) &&
+          !isa<LocalOp>(op))
         return WalkResult::skip();
 
       // skip lazy evaluated expressions
@@ -511,7 +513,7 @@ Expr RegionVisitor::translateIntoContext() {
               if (valueMaterialization) {
                 auto *loc = translator.getLocation(op->getLoc());
                 if (op->getNumResults() == 1 &&
-                    !isa<LValueType>(op->getResult(0).getType())) {
+                    !isa<LValueType, VoidType>(op->getResult(0).getType())) {
                   if (auto exprOp = dyn_cast<ExprOp>(op))
                     if (exprOp.getLazy())
                       return;
@@ -583,6 +585,7 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](AccessFieldOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewStructOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewArrayOp op) { return visitExprWithoutCache(op); })
+            .Case([&](NewUnionOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
               llvm::report_fatal_error("unknown expression type");
             });
@@ -606,8 +609,10 @@ gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(DerefOp op) {
 Expr RegionVisitor::visitExprWithoutCache(AccessFieldOp op) {
   auto composite = visitExpr(op.getComposite());
   auto *loc = getTranslator().getLocation(op.getLoc());
-  auto compositeTy =
-      getTranslator().getOrCreateRecordEntry(op.getComposite().getType());
+  auto ty = op.getComposite().getType();
+  if (auto lvTy = dyn_cast<LValueType>(ty))
+    ty = lvTy.getInnerType();
+  auto compositeTy = getTranslator().getOrCreateRecordEntry(ty);
   auto index = op.getField().getZExtValue();
   auto *field = compositeTy[index];
   if (isa<LValueType>(op.getType()))
@@ -628,6 +633,17 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewStructOp op) {
   return gcc_jit_context_new_struct_constructor(
       getContext(), loc, record.getAsType(), values.size(), fields.data(),
       values.data());
+}
+
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewUnionOp op) {
+  auto record = getTranslator().getOrCreateRecordEntry(op.getType());
+  if (!record.isUnion())
+    llvm_unreachable("expected union type");
+  auto *field = record[op.getIndex().getZExtValue()];
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto value = visitExpr(op.getElement());
+  return gcc_jit_context_new_union_constructor(
+      getContext(), loc, record.getAsType(), field, value);
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewArrayOp op) {
@@ -1065,7 +1081,9 @@ GCCJITTranslation::getOrCreateRecordEntry(Type type) {
   return llvm::TypeSwitch<Type, GCCJITRecord>(type)
       .Case([&](StructType t) { return &getOrCreateStructEntry(t); })
       .Case([&](UnionType t) { return &getOrCreateUnionEntry(t); })
-      .Default(
-          [&](Type) -> GCCJITRecord { llvm_unreachable("unexpected type"); });
+      .Default([&](Type) -> GCCJITRecord {
+        type.dump();
+        llvm_unreachable("unexpected type");
+      });
 }
 } // namespace mlir::gccjit

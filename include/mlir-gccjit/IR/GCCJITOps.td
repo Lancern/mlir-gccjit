@@ -448,6 +448,7 @@ def NewUnionOp : GCCJIT_Op<"new_union"> {
     AnyType:$element,
     IndexAttr:$index
   );
+  // TODO: check if the result type is correct.
   let results = (outs AnyType:$result);
   let assemblyFormat = [{
      $element `at` $index `:` type($element) `,` type($result) attr-dict
@@ -826,7 +827,7 @@ def AccessFieldOp : GCCJIT_Op<"access_field"> {
   let arguments = (ins AnyType:$composite, IndexAttr:$field);
   let results = (outs AnyType:$result);
   let assemblyFormat = [{
-    $composite `[` $field `]` `:` functional-type(operands, results) attr-dict
+    $composite `[` $field `]` `:` type($composite) `->` type($result) attr-dict
   }];
 }
 
