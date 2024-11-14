@@ -15,7 +15,6 @@
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <utility>
 
 #include <llvm/ADT/SmallVector.h>
@@ -607,33 +606,28 @@ gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(DerefOp op) {
 Expr RegionVisitor::visitExprWithoutCache(AccessFieldOp op) {
   auto composite = visitExpr(op.getComposite());
   auto *loc = getTranslator().getLocation(op.getLoc());
-  auto *compositeTy = getTranslator().convertType(op.getComposite().getType());
+  auto compositeTy =
+      getTranslator().getOrCreateRecordEntry(op.getComposite().getType());
   auto index = op.getField().getZExtValue();
-  // TODO: support union and query from cache instead
-  auto *structure = gcc_jit_type_is_struct(compositeTy);
-  if (!structure)
-    llvm_unreachable("expected struct type");
-  auto *field = gcc_jit_struct_get_field(structure, index);
+  auto *field = compositeTy[index];
   if (isa<LValueType>(op.getType()))
     return gcc_jit_lvalue_access_field(composite, loc, field);
   return gcc_jit_rvalue_access_field(composite, loc, field);
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewStructOp op) {
-  auto *rawStructTy = getTranslator().convertType(op.getType());
-  auto *structTy = gcc_jit_type_is_struct(rawStructTy);
-  if (!structTy)
+  auto record = getTranslator().getOrCreateRecordEntry(op.getType());
+  if (!record.isStruct())
     llvm_unreachable("expected struct type");
   llvm::SmallVector<gcc_jit_field *> fields;
   llvm::SmallVector<gcc_jit_rvalue *> values;
   for (auto field : op.getIndices())
-    fields.push_back(
-        gcc_jit_struct_get_field(structTy, static_cast<size_t>(field)));
+    fields.push_back(record[field]);
   visitExprAsRValue(op.getElements(), values);
   auto *loc = getTranslator().getLocation(op.getLoc());
-  return gcc_jit_context_new_struct_constructor(getContext(), loc, rawStructTy,
-                                                values.size(), fields.data(),
-                                                values.data());
+  return gcc_jit_context_new_struct_constructor(
+      getContext(), loc, record.getAsType(), values.size(), fields.data(),
+      values.data());
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewArrayOp op) {
@@ -1066,4 +1060,12 @@ void GCCJITContextDeleter::operator()(gcc_jit_context *ctxt) const {
     gcc_jit_context_release(ctxt);
 }
 
+GCCJITTranslation::GCCJITRecord
+GCCJITTranslation::getOrCreateRecordEntry(Type type) {
+  return llvm::TypeSwitch<Type, GCCJITRecord>(type)
+      .Case([&](StructType t) { return &getOrCreateStructEntry(t); })
+      .Case([&](UnionType t) { return &getOrCreateUnionEntry(t); })
+      .Default(
+          [&](Type) -> GCCJITRecord { llvm_unreachable("unexpected type"); });
+}
 } // namespace mlir::gccjit

@@ -16,6 +16,7 @@
 #define MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 
 #include <llvm/ADT/DenseMap.h>
+#include <llvm/ADT/PointerUnion.h>
 #include <mlir/IR/BuiltinOps.h>
 #include <mlir/IR/Location.h>
 #include <mlir/IR/MLIRContext.h>
@@ -94,6 +95,9 @@ private:
     gcc_jit_field *operator[](size_t index) const {
       return gcc_jit_struct_get_field(structHandle, index);
     }
+    gcc_jit_type *getTypeHandle() const {
+      return gcc_jit_struct_as_type(structHandle);
+    }
   };
 
   class UnionEntry {
@@ -106,6 +110,30 @@ private:
     gcc_jit_type *getRawHandle() const { return unionHandle; }
     size_t getFieldCount() const { return fields.size(); }
     gcc_jit_field *operator[](size_t index) const { return fields[index]; }
+    gcc_jit_type *getTypeHandle() const { return unionHandle; }
+  };
+
+  class GCCJITRecord : public llvm::PointerUnion<UnionEntry *, StructEntry *> {
+  public:
+    using PointerUnion::PointerUnion;
+    gcc_jit_struct *getAsStruct() const {
+      return this->get<StructEntry *>()->getRawHandle();
+    }
+    gcc_jit_type *getAsType() const {
+      return this->is<StructEntry *>() ? get<StructEntry *>()->getTypeHandle()
+                                       : get<UnionEntry *>()->getRawHandle();
+    }
+    gcc_jit_field *operator[](size_t index) const {
+      if (this->is<StructEntry *>())
+        return get<StructEntry *>()->operator[](index);
+      return get<UnionEntry *>()->operator[](index);
+    }
+    size_t getFieldCount() const {
+      return this->is<StructEntry *>() ? get<StructEntry *>()->getFieldCount()
+                                       : get<UnionEntry *>()->getFieldCount();
+    }
+    bool isStruct() const { return this->is<StructEntry *>(); }
+    bool isUnion() const { return this->is<UnionEntry *>(); }
   };
 
   gcc_jit_context *ctxt;
@@ -121,8 +149,12 @@ private:
   void translateGlobalInitializers();
   void translateFunctions();
 
+private:
   StructEntry &getOrCreateStructEntry(StructType type);
   UnionEntry &getOrCreateUnionEntry(UnionType type);
+
+public:
+  GCCJITRecord getOrCreateRecordEntry(Type type);
 };
 
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op);
