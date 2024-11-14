@@ -972,8 +972,6 @@ void RegionVisitor::visitSwitchOp(gcc_jit_block *blk, SwitchOp op) {
        llvm::zip(op.getCaseLowerbound(), op.getCaseUpperbound(),
                  op.getCaseDestinations())) {
     // TODO: handle signedness
-    // TODO: generalize switch statement to support rvalue expressions
-    // (constant)
     auto lbAttr = cast<IntAttr>(lb);
     auto ubAttr = cast<IntAttr>(ub);
     auto intLb = lbAttr.getValue().getZExtValue();
