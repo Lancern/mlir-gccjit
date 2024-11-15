@@ -43,7 +43,7 @@ gccjit.func exported @main() -> !gccjit.int<int> {
         %1 = gccjit.bitcast %rv : !union to !struct1
         // CHECK: %{{[0-9]+}} = %[[CAST]].genius;
         %2 = gccjit.access_field %1[1] : !struct1 -> !gccjit.int<unsigned long>
-        %max = gccjit.const #gccjit.int<0xffffffffffffffff> : !gccjit.int<unsigned long>
+        %max = gccjit.const #gccjit.int<-1> : !gccjit.int<unsigned long>
         %eq = gccjit.compare eq (%2 : !gccjit.int<unsigned long>, %max : !gccjit.int<unsigned long>) : !gccjit.int<bool>
         gccjit.conditional (%eq : !gccjit.int<bool>), ^next, ^abort
 
