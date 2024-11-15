@@ -37,7 +37,7 @@ enum class OutputType {
   Dylib
 };
 
-std::optional<llvm::SmallString<128>>
+llvm::Expected<llvm::SmallString<128>>
 dumpContextToTempfile(gcc_jit_context *ctxt, OutputType type) {
   StringRef suffix;
   llvm::SmallString<128> path;
@@ -63,7 +63,7 @@ dumpContextToTempfile(gcc_jit_context *ctxt, OutputType type) {
   }
   auto err = llvm::sys::fs::createTemporaryFile("mlir-gccjit", suffix, path);
   if (err)
-    return std::nullopt;
+    return llvm::createStringError(err, "failed to create temporary file");
   switch (type) {
   case OutputType::Gimple:
     gcc_jit_context_dump_to_file(ctxt, path.c_str(), false);
@@ -88,6 +88,8 @@ dumpContextToTempfile(gcc_jit_context *ctxt, OutputType type) {
                                     path.c_str());
     break;
   }
+  if (const char *err = gcc_jit_context_get_last_error(ctxt))
+    return llvm::createStringError(llvm::inconvertibleErrorCode(), err);
   return path;
 }
 
