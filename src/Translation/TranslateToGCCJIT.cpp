@@ -1065,7 +1065,10 @@ void GCCJITTranslation::translateFunctions() {
 llvm::Expected<GCCJITContext> translateModuleToGCCJIT(ModuleOp op) {
   GCCJITTranslation translator;
   translator.translateModuleToGCCJIT(op);
-  return translator.takeContext();
+  auto ctx = translator.takeContext();
+  if (const auto *err = gcc_jit_context_get_last_error(ctx.get()))
+    return llvm::createStringError(llvm::inconvertibleErrorCode(), err);
+  return ctx;
 }
 
 ///===----------------------------------------------------------------------===///
