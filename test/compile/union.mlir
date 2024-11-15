@@ -21,7 +21,7 @@
 #int = #gccjit.int<-1> : !gccjit.int<long>
 module attributes { gccjit.opt_level = #gccjit.opt_level<O3>, gccjit.allow_unreachable = true } {
 
-gccjit.global exported @union_data  init {
+gccjit.global internal @union_data  init {
     %e = gccjit.const #float
     %m = gccjit.const #int
     %qc = gccjit.new_struct [0, 1] [%e , %m] : (!gccjit.fp<float>, !gccjit.int<long>) -> !struct1
