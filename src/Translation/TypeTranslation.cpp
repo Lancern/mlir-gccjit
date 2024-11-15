@@ -1,3 +1,4 @@
+#include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 
 #include <optional>
@@ -22,7 +23,17 @@ gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
                   })
                   .Case([&](gccjit::PointerType t) {
                     auto *pointee = convertType(t.getElementType());
+                    if (isa<gccjit::FuncType>(t.getElementType()))
+                      return pointee;
                     return gcc_jit_type_get_pointer(pointee);
+                  })
+                  .Case([&](gccjit::FuncType t) {
+                    llvm::SmallVector<gcc_jit_type *> paramTypes;
+                    convertTypes(t.getInputs(), paramTypes);
+                    auto *returnType = convertType(t.getReturnType());
+                    return gcc_jit_context_new_function_ptr_type(
+                        ctxt, nullptr, returnType, paramTypes.size(),
+                        paramTypes.data(), t.isVarArg());
                   })
                   .Case([&](gccjit::QualifiedType t) {
                     auto *res = convertType(t.getElementType());

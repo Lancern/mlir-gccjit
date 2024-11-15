@@ -846,7 +846,7 @@ def DerefFieldOp : GCCJIT_Op<"deref_field"> {
   let arguments = (ins GCCJIT_PointerType:$ptr, IndexAttr:$field);
   let results = (outs GCCJIT_LValueType:$result);
   let assemblyFormat = [{
-    $ptr `[` $field `]` `:` functional-type(operands, results) attr-dict
+    $ptr `[` $field `]` `:` type($ptr) `->` type($result) attr-dict
   }];
 }
 

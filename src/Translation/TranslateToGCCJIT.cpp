@@ -113,6 +113,7 @@ private:
   Expr visitExprWithoutCache(ExprOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
   Expr visitExprWithoutCache(AccessFieldOp op);
+  gcc_jit_lvalue *visitExprWithoutCache(DerefFieldOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -586,7 +587,9 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](NewStructOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewArrayOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewUnionOp op) { return visitExprWithoutCache(op); })
+            .Case([&](DerefFieldOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
+              op->dump();
               llvm::report_fatal_error("unknown expression type");
             });
 
@@ -618,6 +621,17 @@ Expr RegionVisitor::visitExprWithoutCache(AccessFieldOp op) {
   if (isa<LValueType>(op.getType()))
     return gcc_jit_lvalue_access_field(composite, loc, field);
   return gcc_jit_rvalue_access_field(composite, loc, field);
+}
+
+gcc_jit_lvalue *RegionVisitor::visitExprWithoutCache(DerefFieldOp op) {
+  auto ptr = visitExpr(op.getPtr());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  auto ty = op.getPtr().getType();
+  auto pointee = ty.getElementType();
+  auto compositeTy = getTranslator().getOrCreateRecordEntry(pointee);
+  auto index = op.getField().getZExtValue();
+  auto *field = compositeTy[index];
+  return gcc_jit_rvalue_dereference_field(ptr, loc, field);
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewStructOp op) {
