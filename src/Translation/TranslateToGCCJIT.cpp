@@ -420,68 +420,74 @@ void GCCJITTranslation::translateGlobalInitializers() {
 RegionVisitor::RegionVisitor(GCCJITTranslation &translator, Region &region,
                              RegionVisitor *parent)
     : translator(translator), region(region), parent(parent) {
-  if (auto funcOp = dyn_cast<gccjit::FuncOp>(region.getParentOp())) {
-    auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
-                                      funcOp.getSymName());
-    auto function = translator.getFunction(symName);
-    for (auto arg : region.getArguments()) {
-      auto *lvalue = gcc_jit_function_get_param(function, arg.getArgNumber());
-      exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
-    }
-    AsmState asmState(funcOp);
-    region.walk<WalkOrder::PreOrder>([&](Operation *op) {
-      if (op->getNumResults() != 1)
-        return WalkResult::skip();
-
-      auto res = op->getResult(0);
-
-      if (auto globalOp = dyn_cast<gccjit::GetGlobalOp>(op)) {
-        auto *lvalue = translator.getGlobalLValue(globalOp.getSymAttr());
-        exprCache[res] = lvalue;
-        return WalkResult::skip();
-      }
-
-      // lvalue/void expressions are never materialized
-      if (isa<LValueType, VoidType>(op->getResult(0).getType()) &&
-          !isa<LocalOp>(op))
-        return WalkResult::skip();
-
-      // skip lazy evaluated expressions
-      if (auto exprOp = dyn_cast<ExprOp>(op))
-        if (exprOp.getLazy())
-          return WalkResult::skip();
-
-      auto *type = translator.convertType(res.getType());
-      auto *loc = translator.getLocation(res.getLoc());
-      std::string name;
-      auto varName = op->getAttrOfType<StringAttr>("gccjit.var_name");
-      if (!varName) {
-        llvm::raw_string_ostream bufferStream(name);
-        res.printAsOperand(bufferStream, asmState);
-        bufferStream.flush();
-      } else {
-        name = varName.getValue().str();
-      }
-      auto *lvalue =
-          gcc_jit_function_new_local(function, loc, type, name.c_str());
-      exprCache[res] = lvalue;
-      return isa<ExprOp>(op) ? WalkResult::skip() : WalkResult::advance();
-    });
-    for (auto &block : region) {
-      std::string buffer;
-      llvm::raw_string_ostream bufferStream(buffer);
-      block.printAsOperand(bufferStream, asmState);
-      bufferStream.flush();
-      std::string name;
-      for (auto &c : buffer)
-        if (isalnum(c))
-          name.push_back(c);
-      auto *blk = gcc_jit_function_new_block(function, name.c_str());
-      blocks[&block] = blk;
-    }
-    valueMaterialization = true;
-  } else {
+  auto funcOp = llvm::dyn_cast_if_present<gccjit::FuncOp>(region.getParentOp());
+  if (!funcOp) {
     valueMaterialization = false;
+    return;
+  }
+
+  valueMaterialization = true;
+
+  auto symName = SymbolRefAttr::get(funcOp.getOperation()->getContext(),
+                                    funcOp.getSymName());
+  auto function = translator.getFunction(symName);
+  for (auto arg : region.getArguments()) {
+    auto *lvalue = gcc_jit_function_get_param(function, arg.getArgNumber());
+    exprCache[arg] = gcc_jit_param_as_lvalue(lvalue);
+  }
+  AsmState asmState(funcOp);
+  region.walk<WalkOrder::PreOrder>([&](Operation *op) {
+    if (op->getNumResults() != 1)
+      return WalkResult::skip();
+
+    auto res = op->getResult(0);
+
+    if (auto globalOp = dyn_cast<gccjit::GetGlobalOp>(op)) {
+      auto *lvalue = translator.getGlobalLValue(globalOp.getSymAttr());
+      exprCache[res] = lvalue;
+      return WalkResult::skip();
+    }
+
+    // lvalue/void expressions are never materialized
+    if (isa<LValueType, VoidType>(op->getResult(0).getType()) &&
+        !isa<LocalOp>(op))
+      return WalkResult::skip();
+
+    // skip lazy evaluated expressions
+    if (auto exprOp = dyn_cast<ExprOp>(op))
+      if (exprOp.getLazy())
+        return WalkResult::skip();
+
+    auto *type = translator.convertType(res.getType());
+    auto *loc = translator.getLocation(res.getLoc());
+    std::string name;
+    auto varName = op->getAttrOfType<StringAttr>("gccjit.var_name");
+    if (!varName) {
+      llvm::raw_string_ostream bufferStream(name);
+      res.printAsOperand(bufferStream, asmState);
+      bufferStream.flush();
+    } else {
+      name = varName.getValue().str();
+    }
+    auto *lvalue =
+        gcc_jit_function_new_local(function, loc, type, name.c_str());
+    exprCache[res] = lvalue;
+    return isa<ExprOp>(op) ? WalkResult::skip() : WalkResult::advance();
+  });
+
+  unsigned nextBlockId = 0;
+  auto nextBlockName = [&] {
+    std::string name;
+    llvm::raw_string_ostream nameWriter(name);
+    nameWriter << "bb" << nextBlockId++;
+    nameWriter.flush();
+    return name;
+  };
+
+  for (auto &block : region) {
+    std::string name = nextBlockName();
+    auto *blk = gcc_jit_function_new_block(function, name.c_str());
+    blocks[&block] = blk;
   }
 }
 
