@@ -109,20 +109,18 @@ module @vector attributes {
             gccjit.return
     }
 
-    gccjit.func imported @strlen(!str) -> !size_t
-    gccjit.func imported @puts(!str) -> !gccjit.int<int>
-
     gccjit.func exported @main () -> !gccjit.int<int> {
         %data = gccjit.literal "ABCabcefljasdvkmfSDADASJLFDJFLDsdasfksdafnkdasfjASDASDADSDklfdsfnsdlkfnasdkfknAGJRWTOdsadasdasd" : !str
         %one = gccjit.const #gccjit.one : !size_t
-        %len = gccjit.call @strlen(%data) : (!str) -> !size_t
+        %len = gccjit.call builtin @strlen(%data) : (!str) -> !size_t
         %len_plus_one = gccjit.binary plus (%len : !size_t, %one : !size_t) : !size_t
         %alloca = gccjit.call builtin @alloca (%len_plus_one) : (!size_t) -> !gccjit.ptr<!gccjit.void>
         %voidptr = gccjit.bitcast %data : !str to !gccjit.ptr<!gccjit.qualified<!gccjit.void, const>>
         gccjit.call builtin @memcpy (%alloca, %voidptr, %len_plus_one) : (!gccjit.ptr<!gccjit.void>, !gccjit.ptr<!gccjit.qualified<!gccjit.void, const>>, !size_t) -> !gccjit.ptr<!gccjit.void>
         %charptr = gccjit.cast %alloca : !gccjit.ptr<!gccjit.void> to !gccjit.ptr<!char>
         gccjit.call @alpha_flipcase(%charptr, %len) : (!gccjit.ptr<!char>, !size_t) -> ()
-        gccjit.call @puts(%charptr) : (!gccjit.ptr<!char>) -> !gccjit.int<int>
+        %cast_str = gccjit.cast %charptr : !gccjit.ptr<!char> to !str
+        gccjit.call builtin @puts(%cast_str) : (!str) -> !gccjit.int<int>
         %zero = gccjit.const #gccjit.zero : !gccjit.int<int>
         gccjit.return %zero : !gccjit.int<int>
     }
