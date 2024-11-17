@@ -109,6 +109,7 @@ private:
   gcc_jit_rvalue *visitExprWithoutCache(NewStructOp op);
   gcc_jit_rvalue *visitExprWithoutCache(NewArrayOp op);
   gcc_jit_rvalue *visitExprWithoutCache(NewUnionOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(NewVectorOp op);
   gcc_jit_lvalue *visitExprWithoutCache(GetGlobalOp op);
   Expr visitExprWithoutCache(ExprOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
@@ -593,6 +594,7 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](NewStructOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewArrayOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewUnionOp op) { return visitExprWithoutCache(op); })
+            .Case([&](NewVectorOp op) { return visitExprWithoutCache(op); })
             .Case([&](DerefFieldOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
               op->dump();
@@ -664,6 +666,15 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewUnionOp op) {
   auto value = visitExpr(op.getElement());
   return gcc_jit_context_new_union_constructor(
       getContext(), loc, record.getAsType(), field, value);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewVectorOp op) {
+  auto *vectorTy = getTranslator().convertType(op.getType());
+  auto *loc = getTranslator().getLocation(op.getLoc());
+  llvm::SmallVector<gcc_jit_rvalue *> values;
+  visitExprAsRValue(op.getElements(), values);
+  return gcc_jit_context_new_rvalue_from_vector(getContext(), loc, vectorTy,
+                                                values.size(), values.data());
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewArrayOp op) {

@@ -263,17 +263,22 @@ ParseResult parseArrayOrVectorElements(
     llvm::SmallVectorImpl<OpAsmParser::UnresolvedOperand> &elementValues,
     llvm::SmallVectorImpl<Type> &elementTypes) {
   bool mayContinue = true;
+  Type elementTy;
+  if (auto containerTy = dyn_cast<gccjit::ArrayType>(expectedType))
+    elementTy = containerTy.getElementType();
+  else if (auto containerTy = dyn_cast<gccjit::VectorType>(expectedType))
+    elementTy = containerTy.getElementType();
+  else
+    return parser.emitError(parser.getCurrentLocation(),
+                            "expected array or vector type");
   auto parseOptionalValueTypePair = [&]() -> ParseResult {
     OpAsmParser::UnresolvedOperand elementValue;
-    Type elementType;
     if (!parser.parseOptionalOperand(elementValue).has_value()) {
       mayContinue = false;
       return success();
     }
-    if (parser.parseColonType(elementType))
-      return failure();
     elementValues.push_back(elementValue);
-    elementTypes.push_back(elementType);
+    elementTypes.push_back(elementTy);
     if (parser.parseOptionalComma().succeeded()) {
       mayContinue = true;
       return success();
@@ -287,16 +292,11 @@ ParseResult parseArrayOrVectorElements(
   return success();
 }
 
-void printArrayOrVectorElements(OpAsmPrinter &p, Operation *op,
-                                Type expectedType, OperandRange elementValues,
-                                ValueTypeRange<OperandRange> elementTypes) {
-  llvm::interleaveComma(llvm::zip(elementValues, elementTypes), p,
-                        [&](auto pair) {
-                          auto [value, type] = pair;
-                          p.printOperand(value);
-                          p << " : ";
-                          p.printType(type);
-                        });
+void printArrayOrVectorElements(
+    OpAsmPrinter &p, [[maybe_unused]] Operation *op,
+    [[maybe_unused]] Type expectedType, OperandRange elementValues,
+    [[maybe_unused]] ValueTypeRange<OperandRange> elementTypes) {
+  llvm::interleaveComma(elementValues, p, [&](auto x) { p.printOperand(x); });
 }
 
 struct ParseNamedUnitAttr {

@@ -747,7 +747,7 @@ def DerefOp : GCCJIT_Op<"deref"> {
     %res = gccjit.deref (%ptr : !gccjit.ptr<!i32>) : !gccjit.lvalue<!i32>
     ```
   }];
-  let arguments = (ins GCCJIT_PointerType:$ptr, Optional<GCCJIT_IntType>:$offset);
+  let arguments = (ins AnyType:$ptr, Optional<AnyType>:$offset);
   let results = (outs GCCJIT_LValueType:$result);
   let assemblyFormat = [{
     `(` $ptr `:` type($ptr) (`,` $offset^ `:` type($offset) )? `)`
