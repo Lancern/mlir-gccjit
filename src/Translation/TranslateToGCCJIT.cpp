@@ -121,6 +121,7 @@ private:
   gcc_jit_lvalue *visitExprWithoutCache(DerefFieldOp op);
   gcc_jit_rvalue *visitExprWithoutCache(AtomicLoadOp op);
   gcc_jit_rvalue *visitExprWithoutCache(AtomicRMWOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(AtomicCompareExchangeOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -606,6 +607,9 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](DerefFieldOp op) { return visitExprWithoutCache(op); })
             .Case([&](AtomicLoadOp op) { return visitExprWithoutCache(op); })
             .Case([&](AtomicRMWOp op) { return visitExprWithoutCache(op); })
+            .Case([&](AtomicCompareExchangeOp op) {
+              return visitExprWithoutCache(op);
+            })
             .Default([](Operation *op) -> Expr {
               op->dump();
               llvm::report_fatal_error("unknown expression type");
@@ -842,6 +846,42 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AtomicRMWOp op) {
     return result;
   return gcc_jit_context_new_bitcast(translator.getContext(), loc, result,
                                      translator.convertType(op.getType()));
+}
+
+gcc_jit_rvalue *
+RegionVisitor::visitExprWithoutCache(AtomicCompareExchangeOp op) {
+  gcc_jit_location *loc = translator.getLocation(op.getLoc());
+
+  gcc_jit_rvalue *ptr =
+      castToVolatileVoidPtr(translator, visitExpr(op.getPtr()), loc);
+  gcc_jit_rvalue *expected =
+      castToCVVoidPtr(translator, visitExpr(op.getExpected()), loc);
+  gcc_jit_rvalue *desired = visitExpr(op.getDesired());
+  gcc_jit_rvalue *successOrdering =
+      translateAtomicOrdering(translator, op.getSuccessOrd());
+  gcc_jit_rvalue *failureOrdering =
+      translateAtomicOrdering(translator, op.getFailureOrd());
+
+  size_t objectSize =
+      translator.getTypeSize(op.getPtr().getType().getElementType());
+  if (!mlir::isa<IntegerType, IntType>(op.getDesired().getType())) {
+    gcc_jit_type *intTy =
+        gcc_jit_context_get_int_type(translator.getContext(), objectSize, true);
+    desired = gcc_jit_context_new_bitcast(translator.getContext(), loc, desired,
+                                          intTy);
+  }
+
+  gcc_jit_type *boolTy =
+      gcc_jit_context_get_type(translator.getContext(), GCC_JIT_TYPE_BOOL);
+  gcc_jit_rvalue *weak =
+      op.getWeak() ? gcc_jit_context_one(translator.getContext(), boolTy)
+                   : gcc_jit_context_zero(translator.getContext(), boolTy);
+
+  std::string builtinFuncName =
+      "__atomic_compare_exchange_" + std::to_string(objectSize);
+  return buildBuiltinFuncCall(
+      translator, builtinFuncName.c_str(), loc,
+      {ptr, expected, desired, weak, successOrdering, failureOrdering});
 }
 
 Expr RegionVisitor::visitExprWithoutCache(ExprOp op) {
