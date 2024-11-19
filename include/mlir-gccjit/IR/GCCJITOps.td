@@ -339,6 +339,7 @@ def ExprOp : GCCJIT_Op<"expr"> {
   let summary = "Expression";
   let description = [{
     The "expr" operation represents an expression.
+
     ```mlir
     %res = gccjit.expr {
       %0 = gccjit.const #gccjit.int<32> : !gccjit.int<32>
@@ -346,8 +347,50 @@ def ExprOp : GCCJIT_Op<"expr"> {
       %2 = gccjit.binary plus %0, %1 : !gccjit.int<32>, !gccjit.int<32>
       gccjit.return %2 : !gccjit.int<32>
     } : !gccjit.int<32>
+    ```
+    
     The expr operation can be marked with a lazy attribute. If such an attribute
     exists, the expr will not be materialized until it is used.
+
+    The above, for example, will be translated into the following gimple:
+
+    ```c
+    %res = 32 + 32
+    ```
+
+    Without the expr block, the above would be translated into:
+    ```c
+    %0 = 32
+    %1 = 32
+    %2 = %0 + %1
+    %3 = %2
+    ```
+
+    The lazy evaluation attribute is used to compose expression block with other operations
+    that may have side effects.
+    For example,
+
+    ```mlir
+    %x = gccjit.expr lazy {
+      %0 = gccjit.const #gccjit.int<32> : !gccjit.int<32>
+      %1 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!i32> -> !gccjit.int<32>
+      %2 = gccjit.compare lt (%0 : !gccjit.int<32>, %1 : !gccjit.int<32>) : !gccjit.bool
+      gccjit.return %2 : !gccjit.bool
+    } : !gccjit.int<32>
+    gccjit.conditional %x, ^true, ^false
+    ```
+
+    will be translated into:
+
+    ```c
+    if ((int)32 < %arg0) goto ^true; else goto ^false;
+    ```
+
+    Without the lazy attribute, the above would be translated into:
+
+    ```c
+    %x = (int)32 < %arg0
+    if (%x) goto ^true; else goto ^false;
     ```
   }];
   let arguments = (ins UnitAttr:$lazy);

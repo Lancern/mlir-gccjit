@@ -1,4 +1,9 @@
+> "There is one who could unite them, one who could reclaim the throne of Gondor."     (Gandalf)
+
+
 <img src="https://github.com/Lancern/mlir-gccjit/raw/main/logo.png" width="232px" height="273px" align="right" />
+
+
 
 # mlir-gccjit
 
@@ -62,4 +67,4 @@ cmake --build .
 
 ## License
 
-This project is licensed under [Apache License 2.0](./LICENSE).
+Please refer to [COPYING](COPYING) for more information.
