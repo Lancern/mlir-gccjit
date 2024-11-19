@@ -1,5 +1,6 @@
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 
+#include <climits>
 #include <optional>
 
 #include <llvm/ADT/TypeSwitch.h>
@@ -8,6 +9,7 @@
 #include <libgccjit.h>
 
 #include "mlir-gccjit/IR/GCCJITTypes.h"
+#include "llvm/Support/ErrorHandling.h"
 
 namespace mlir::gccjit {
 
@@ -97,13 +99,48 @@ gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
             auto kind = t.getKind();
             return gcc_jit_context_get_type(ctxt, kind);
           })
+          .Case([&](mlir::IntegerType t) {
+            assert(!t.isSignless() && "signless integer type is not supported");
+            return gcc_jit_context_get_int_type(ctxt, t.getWidth() / CHAR_BIT,
+                                                t.isSigned());
+          })
+          .Case([&](mlir::IndexType) {
+            return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_SIZE_T);
+          })
           .Case([&](gccjit::FloatType t) {
             auto kind = t.getKind();
             return gcc_jit_context_get_type(ctxt, kind);
           })
+          .Case([&](mlir::Float32Type) {
+            return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_FLOAT);
+          })
+          .Case([&](mlir::Float64Type) {
+            return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_DOUBLE);
+          })
           .Case([&](gccjit::ComplexType t) {
             auto kind = t.getKind();
             return gcc_jit_context_get_type(ctxt, kind);
+          })
+          .Case([&](mlir::ComplexType t) {
+            mlir::Type elementTy = t.getElementType();
+            if (mlir::isa<mlir::Float32Type>(elementTy))
+              return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_COMPLEX_FLOAT);
+            if (mlir::isa<mlir::Float64Type>(elementTy))
+              return gcc_jit_context_get_type(ctxt,
+                                              GCC_JIT_TYPE_COMPLEX_DOUBLE);
+            if (auto floatTy = mlir::dyn_cast<gccjit::FloatType>(elementTy)) {
+              switch (floatTy.getKind()) {
+              case GCC_JIT_TYPE_FLOAT:
+                return gcc_jit_context_get_type(ctxt,
+                                                GCC_JIT_TYPE_COMPLEX_FLOAT);
+              case GCC_JIT_TYPE_DOUBLE:
+                return gcc_jit_context_get_type(ctxt,
+                                                GCC_JIT_TYPE_COMPLEX_DOUBLE);
+              default:
+                break;
+              }
+            }
+            llvm_unreachable("unsupported complex element type");
           })
           .Case([&](gccjit::VoidType t) {
             return gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_VOID);
@@ -119,6 +156,13 @@ gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
             auto size = t.getNumUnits();
             return gcc_jit_type_get_vector(elemType, size);
           })
+          .Case([&](mlir::VectorType t) {
+            assert(!t.isScalable() &&
+                   "scalable vector types are not supported");
+            auto *elemType = convertType(t.getElementType());
+            auto size = t.getNumElements();
+            return gcc_jit_type_get_vector(elemType, size);
+          })
           .Case([&](gccjit::StructType t) -> gcc_jit_type * {
             gcc_jit_struct *rawType = getOrCreateStructEntry(t).getRawHandle();
             return gcc_jit_struct_as_type(rawType);
@@ -126,7 +170,9 @@ gcc_jit_type *GCCJITTranslation::convertType(mlir::Type type) {
           .Case([&](gccjit::UnionType t) -> gcc_jit_type * {
             return getOrCreateUnionEntry(t).getRawHandle();
           })
-          .Default([](mlir::Type) { return nullptr; });
+          .Default([](mlir::Type) -> gcc_jit_type * {
+            llvm_unreachable("unsupported type for gccjit translation");
+          });
   typeMap[type] = res;
   return res;
 }
