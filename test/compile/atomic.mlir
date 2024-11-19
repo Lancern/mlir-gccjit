@@ -39,4 +39,34 @@ module @test attributes {
             %1 = gccjit.atomic.load relaxed (%0 : !ppi32) : !pi32
             gccjit.return %1 : !pi32
     }
+
+    // CHECK-LABEL: atomic_store_int
+    gccjit.func exported @atomic_store_int(!pi32, !i32) {
+        ^entry(%arg0 : !gccjit.lvalue<!pi32>, %arg1 : !gccjit.lvalue<!i32>):
+            %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!pi32> to !pi32
+            %1 = gccjit.as_rvalue %arg1 : !gccjit.lvalue<!i32> to !i32
+            // CHECK: (void)__atomic_store_4 (((volatile void *)%{{.+}}), %{{.+}}, (int)0);
+            gccjit.atomic.store relaxed (%0 : !pi32, %1 : !i32)
+            gccjit.return
+    }
+
+    // CHECK-LABEL: atomic_store_float
+    gccjit.func exported @atomic_store_float(!pf32, !f32) {
+        ^entry(%arg0 : !gccjit.lvalue<!pf32>, %arg1 : !gccjit.lvalue<!f32>):
+            %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!pf32> to !pf32
+            %1 = gccjit.as_rvalue %arg1 : !gccjit.lvalue<!f32> to !f32
+            // CHECK: (void)__atomic_store_4 (((volatile void *)%{{.+}}), (bitcast(%{{.+}}, int)), (int)0);
+            gccjit.atomic.store relaxed (%0 : !pf32, %1 : !f32)
+            gccjit.return
+    }
+
+    // CHECK-LABEL: atomic_store_ptr
+    gccjit.func exported @atomic_store_ptr(!ppi32, !pi32) {
+        ^entry(%arg0 : !gccjit.lvalue<!ppi32>, %arg1 : !gccjit.lvalue<!pi32>):
+            %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!ppi32> to !ppi32
+            %1 = gccjit.as_rvalue %arg1 : !gccjit.lvalue<!pi32> to !pi32
+            // CHECK: (void)__atomic_store_8 (((volatile void *)%{{.+}}), (bitcast(%{{.+}}, long long)), (int)0);
+            gccjit.atomic.store relaxed (%0 : !ppi32, %1 : !pi32)
+            gccjit.return
+    }
 }

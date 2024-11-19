@@ -130,6 +130,7 @@ private:
   void visitAsmOp(gcc_jit_block *blk, AsmOp op);
   void visitAsmGotoOp(gcc_jit_block *blk, AsmGotoOp op);
   void visitConditionalOp(gcc_jit_block *blk, ConditionalOp op);
+  void visitAtomicStoreOp(gcc_jit_block *blk, AtomicStoreOp op);
 
   gcc_jit_block *lookupBlock(Block *block);
   Expr &lookupExpr(Value value);
@@ -522,6 +523,7 @@ Expr RegionVisitor::translateIntoContext() {
             .Case([&](AsmOp op) { visitAsmOp(blk, op); })
             .Case([&](AsmGotoOp op) { visitAsmGotoOp(blk, op); })
             .Case([&](ConditionalOp op) { visitConditionalOp(blk, op); })
+            .Case([&](AtomicStoreOp op) { visitAtomicStoreOp(blk, op); })
             .Default([&](Operation *op) {
               if (valueMaterialization) {
                 auto *loc = translator.getLocation(op->getLoc());
@@ -743,6 +745,15 @@ static gcc_jit_rvalue *castToCVVoidPtr(GCCJITTranslation &trans,
   return gcc_jit_context_new_cast(trans.getContext(), loc, value, cvVoidPtrTy);
 }
 
+static gcc_jit_rvalue *castToVolatileVoidPtr(GCCJITTranslation &trans,
+                                             gcc_jit_rvalue *value,
+                                             gcc_jit_location *loc) {
+  gcc_jit_type *cvVoidPtrTy =
+      gcc_jit_type_get_pointer(gcc_jit_type_get_volatile(
+          gcc_jit_context_get_type(trans.getContext(), GCC_JIT_TYPE_VOID)));
+  return gcc_jit_context_new_cast(trans.getContext(), loc, value, cvVoidPtrTy);
+}
+
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AtomicLoadOp op) {
   gcc_jit_location *loc = translator.getLocation(op.getLoc());
 
@@ -775,6 +786,30 @@ void RegionVisitor::visitConditionalOp(gcc_jit_block *blk, ConditionalOp op) {
   auto *loc = getTranslator().getLocation(op.getLoc());
   gcc_jit_block_end_with_conditional(blk, loc, condition, trueBlock,
                                      falseBlock);
+}
+
+void RegionVisitor::visitAtomicStoreOp(gcc_jit_block *blk, AtomicStoreOp op) {
+  gcc_jit_location *loc = translator.getLocation(op.getLoc());
+
+  gcc_jit_rvalue *ptr =
+      castToVolatileVoidPtr(translator, visitExpr(op.getPtr()), loc);
+  gcc_jit_rvalue *value = visitExpr(op.getValue());
+  gcc_jit_rvalue *order = translateAtomicOrdering(translator, op.getOrdering());
+
+  size_t objectSize =
+      translator.getTypeSize(op.getPtr().getType().getElementType());
+  if (!mlir::isa<IntegerType, IntType>(op.getValue().getType())) {
+    gcc_jit_type *intTy =
+        gcc_jit_context_get_int_type(translator.getContext(), objectSize, true);
+    value =
+        gcc_jit_context_new_bitcast(translator.getContext(), loc, value, intTy);
+  }
+
+  std::string builtinFuncName = "__atomic_store_" + std::to_string(objectSize);
+  gcc_jit_rvalue *builtinCall = buildBuiltinFuncCall(
+      translator, builtinFuncName.c_str(), loc, {ptr, value, order});
+
+  gcc_jit_block_add_eval(blk, loc, builtinCall);
 }
 
 void RegionVisitor::visitExprAsRValue(
