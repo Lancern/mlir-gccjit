@@ -15,6 +15,10 @@
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <initializer_list>
+#include <iterator>
+#include <string>
 #include <utility>
 
 #include <llvm/ADT/SmallVector.h>
@@ -115,6 +119,7 @@ private:
   gcc_jit_lvalue *visitExprWithoutCache(DerefOp op);
   Expr visitExprWithoutCache(AccessFieldOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefFieldOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(AtomicLoadOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -596,6 +601,7 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](NewUnionOp op) { return visitExprWithoutCache(op); })
             .Case([&](NewVectorOp op) { return visitExprWithoutCache(op); })
             .Case([&](DerefFieldOp op) { return visitExprWithoutCache(op); })
+            .Case([&](AtomicLoadOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
               op->dump();
               llvm::report_fatal_error("unknown expression type");
@@ -684,6 +690,77 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(NewArrayOp op) {
   visitExprAsRValue(op.getElements(), values);
   return gcc_jit_context_new_array_constructor(getContext(), loc, arrayTy,
                                                values.size(), values.data());
+}
+
+static gcc_jit_rvalue *
+buildBuiltinFuncCall(GCCJITTranslation &trans, const char *funcName,
+                     gcc_jit_location *loc,
+                     llvm::ArrayRef<gcc_jit_rvalue *> args) {
+  gcc_jit_function *func =
+      gcc_jit_context_get_builtin_function(trans.getContext(), funcName);
+  return gcc_jit_context_new_call(trans.getContext(), loc, func, args.size(),
+                                  const_cast<gcc_jit_rvalue **>(args.data()));
+}
+
+static gcc_jit_rvalue *translateAtomicOrdering(GCCJITTranslation &trans,
+                                               AtomicOrdering ordering) {
+  int gccMemOrder;
+  switch (ordering) {
+  case AtomicOrdering::Relaxed:
+    gccMemOrder = __ATOMIC_RELAXED;
+    break;
+  case AtomicOrdering::Consume:
+    gccMemOrder = __ATOMIC_CONSUME;
+    break;
+  case AtomicOrdering::Acquire:
+    gccMemOrder = __ATOMIC_ACQUIRE;
+    break;
+  case AtomicOrdering::Release:
+    gccMemOrder = __ATOMIC_RELEASE;
+    break;
+  case AtomicOrdering::AcqRel:
+    gccMemOrder = __ATOMIC_ACQ_REL;
+    break;
+  case AtomicOrdering::SeqCst:
+    gccMemOrder = __ATOMIC_SEQ_CST;
+    break;
+  default:
+    llvm_unreachable("unknown atomic ordering");
+  }
+
+  gcc_jit_type *gccMemOrderType =
+      gcc_jit_context_get_type(trans.getContext(), GCC_JIT_TYPE_INT);
+  return gcc_jit_context_new_rvalue_from_int(trans.getContext(),
+                                             gccMemOrderType, gccMemOrder);
+}
+
+static gcc_jit_rvalue *castToCVVoidPtr(GCCJITTranslation &trans,
+                                       gcc_jit_rvalue *value,
+                                       gcc_jit_location *loc) {
+  gcc_jit_type *cvVoidPtrTy =
+      gcc_jit_type_get_pointer(gcc_jit_type_get_volatile(gcc_jit_type_get_const(
+          gcc_jit_context_get_type(trans.getContext(), GCC_JIT_TYPE_VOID))));
+  return gcc_jit_context_new_cast(trans.getContext(), loc, value, cvVoidPtrTy);
+}
+
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AtomicLoadOp op) {
+  gcc_jit_location *loc = translator.getLocation(op.getLoc());
+
+  gcc_jit_rvalue *ptr =
+      castToCVVoidPtr(translator, visitExpr(op.getPtr()), loc);
+  gcc_jit_rvalue *order = translateAtomicOrdering(translator, op.getOrdering());
+
+  size_t objectSize =
+      translator.getTypeSize(op.getPtr().getType().getElementType());
+  std::string builtinName = "__atomic_load_" + std::to_string(objectSize);
+  gcc_jit_rvalue *result =
+      buildBuiltinFuncCall(translator, builtinName.c_str(), loc, {ptr, order});
+
+  if (mlir::isa<IntegerType, IntType>(op.getType()))
+    return result;
+
+  return gcc_jit_context_new_bitcast(translator.getContext(), loc, result,
+                                     translator.convertType(op.getType()));
 }
 
 Expr RegionVisitor::visitExprWithoutCache(ExprOp op) {

@@ -15,6 +15,8 @@
 #ifndef MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 #define MLIR_GCCJIT_TRANSLATION_TRANSLATETOGCCJIT_H
 
+#include <cstddef>
+
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/PointerUnion.h>
 #include <mlir/IR/BuiltinOps.h>
@@ -55,6 +57,8 @@ public:
   MLIRContext *getMLIRContext() const { return moduleOp->getContext(); }
 
   void translateModuleToGCCJIT(ModuleOp op);
+
+  size_t getTypeSize(Type type);
 
   gcc_jit_type *convertType(Type type);
   void convertTypes(TypeRange types, llvm::SmallVector<gcc_jit_type *> &result);

@@ -1,13 +1,51 @@
-#include "mlir-gccjit/IR/GCCJITTypes.h"
 #include "mlir-gccjit/Translation/TranslateToGCCJIT.h"
 
 #include <optional>
 
 #include <llvm/ADT/TypeSwitch.h>
+#include <mlir/IR/BuiltinTypes.h>
 
 #include <libgccjit.h>
 
+#include "mlir-gccjit/IR/GCCJITTypes.h"
+
 namespace mlir::gccjit {
+
+size_t GCCJITTranslation::getTypeSize(Type type) {
+  // gcc_jit_type_get_size only works for integer types now.
+  if (mlir::isa<IntegerType, IntType>(type))
+    return gcc_jit_type_get_size(convertType(type));
+
+  if (mlir::isa<IndexType, PointerType>(type)) {
+    // Let's pray size_t and pointers have the same size on users' machines.
+    gcc_jit_type *sizeType =
+        gcc_jit_context_get_type(ctxt, GCC_JIT_TYPE_SIZE_T);
+    return gcc_jit_type_get_size(sizeType);
+  }
+
+  if (auto floatTy = mlir::dyn_cast<FloatType>(type)) {
+    switch (floatTy.getKind()) {
+    case GCC_JIT_TYPE_FLOAT:
+      return 4;
+    case GCC_JIT_TYPE_DOUBLE:
+      return 8;
+    // TODO: add getTypeSize support for long double type.
+    default:
+      llvm_unreachable("unsupported gccjit float type");
+    }
+  }
+  if (mlir::isa<BFloat16Type>(type))
+    return 2;
+  if (mlir::isa<Float32Type>(type))
+    return 4;
+  if (mlir::isa<Float64Type>(type))
+    return 8;
+
+  // TODO: add getTypeSize support for struct type and union type.
+
+  llvm_unreachable("unsupported gccjit object type");
+}
+
 void GCCJITTranslation::convertTypes(
     mlir::TypeRange types, llvm::SmallVector<gcc_jit_type *> &result) {
   for (auto type : types)
