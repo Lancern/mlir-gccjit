@@ -269,14 +269,14 @@ def LocalOp : GCCJIT_Op<"local"> {
   let description = [{
     The "local_var" operation declares a local variable.
   }];
-  let arguments = (ins 
+  let arguments = (ins
     OptionalAttr<StrAttr>:$reg_name,
     OptionalAttr<IndexAttr>:$alignment,
     OptionalAttr<TLSModelAttr>:$tls_model
   );
   let results = (outs GCCJIT_LValueType:$var);
   let assemblyFormat = [{
-    oilist ( 
+    oilist (
       `reg` `(` qualified($reg_name) `)` |
       `align` `(` qualified($alignment) `)` |
       `tls_model` `(` qualified($tls_model) `)`
@@ -303,7 +303,7 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
   let description = [{
     The "global_var" operation declares a global variable.
   }];
-  let arguments = (ins 
+  let arguments = (ins
     GlbKind:$glb_kind,
     UnitAttr:$readonly,
     SymbolNameAttr:$sym_name,
@@ -320,7 +320,7 @@ def GlobalOp : GCCJIT_Op<"global", [IsolatedFromAbove]> {
     $glb_kind
     custom<ReadOnlyAttr>($readonly)
     $sym_name
-    oilist ( 
+    oilist (
       `reg` `(` qualified($reg_name) `)` |
       `align` `(` qualified($alignment) `)` |
       `tls_model` `(` qualified($tls_model) `)` |
@@ -466,7 +466,7 @@ def NewStructOp : GCCJIT_Op<"new_struct"> {
     %0 = gccjit.new_struct [0, 1] [%1, %2] : (!i32, !i32) -> !gccjit.struct<(!i32, !i32)>
     ```
   }];
-  let arguments = (ins 
+  let arguments = (ins
     DenseI32ArrayAttr:$indices,
     Variadic<AnyType>:$elements
   );
@@ -484,10 +484,10 @@ def NewUnionOp : GCCJIT_Op<"new_union"> {
     Each value has to have the same unqualified type as the field it is applied
     to.
     ```mlir
-    %union = gccjit.new_union %1 at 0 : !i32, !gccjit.union<(!i32)> 
+    %union = gccjit.new_union %1 at 0 : !i32, !gccjit.union<(!i32)>
     ```
   }];
-  let arguments = (ins 
+  let arguments = (ins
     AnyType:$element,
     IndexAttr:$index
   );
@@ -641,8 +641,8 @@ def CallOp : GCCJIT_Op<"call"> {
     %res = gccjit.call tail @foo ( %arg0 : !gccjit.int<i32>, %arg1 : !gccjit.int<i32> ) : !gccjit.int<i32>
     ```
   }];
-  let arguments = (ins SymbolRefAttr:$callee, 
-    Variadic<AnyType>:$args, 
+  let arguments = (ins SymbolRefAttr:$callee,
+    Variadic<AnyType>:$args,
     UnitAttr:$tail,
     UnitAttr:$builtin
   );
@@ -672,7 +672,7 @@ def PtrCallOp : GCCJIT_Op<"ptr_call"> {
   let arguments = (ins GCCJIT_PointerType:$callee, Variadic<AnyType>:$args, UnitAttr:$tail);
   let results = (outs Optional<AnyType>:$result);
   let assemblyFormat = [{
-    custom<TailCallAttr>($tail) 
+    custom<TailCallAttr>($tail)
     $callee `(` $args `)` `:` functional-type(operands, results) attr-dict
   }];
 }
@@ -704,8 +704,8 @@ def CastOp : GCCJIT_Op<"cast"> {
 def BitCastOp : GCCJIT_Op<"bitcast"> {
   let summary = "Bitcast operation";
   let description = [{
-    Given an rvalue of T, bitcast it to another type, 
-    meaning that this will generate a new rvalue by interpreting 
+    Given an rvalue of T, bitcast it to another type,
+    meaning that this will generate a new rvalue by interpreting
     the bits of rvalue to the layout of type.
 
     The type of rvalue must be the same size as the size of type.
@@ -921,14 +921,14 @@ def AsmOp : GCCJIT_Op<"asm", [AttrSizedOperandSegments]> {
     The "asm" operation represents an inline assembly operation.
 
     ```mlir
-    gccjit.asm inline volatile ("..." 
-      : "=r"(%result) 
-      : "r"(%arg0), "r"(%arg1) 
+    gccjit.asm inline volatile ("..."
+      : "=r"(%result)
+      : "r"(%arg0), "r"(%arg1)
       : "memory"
     )
     ```
   }];
-  let arguments = (ins 
+  let arguments = (ins
     UnitAttr:$inline_flag,
     UnitAttr:$volatile_flag,
     StrAttr:$template_code,
@@ -943,7 +943,7 @@ def AsmOp : GCCJIT_Op<"asm", [AttrSizedOperandSegments]> {
   let assemblyFormat = [{
     custom<AsmInlineAttr>($inline_flag)
     custom<AsmVolatileAttr>($volatile_flag)
-    `(` 
+    `(`
        $template_code
       `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs,
                               type($outputs))
@@ -964,16 +964,16 @@ def AsmGotoOp : GCCJIT_Op<"asm_goto",
     The "asm" operation represents an inline assembly operation.
 
     ```mlir
-    gccjit.asm_goto inline volatile ("..." 
-      : "=r"(%result) 
-      : "r"(%arg0), "r"(%arg1) 
+    gccjit.asm_goto inline volatile ("..."
+      : "=r"(%result)
+      : "r"(%arg0), "r"(%arg1)
       : "memory"
       : /* goto labels */ label1, label2
       : /* fallthrough label */ "label3"
     )
     ```
   }];
-  let arguments = (ins 
+  let arguments = (ins
     UnitAttr:$inline_flag,
     UnitAttr:$volatile_flag,
     StrAttr:$template_code,
@@ -990,7 +990,7 @@ def AsmGotoOp : GCCJIT_Op<"asm_goto",
   let assemblyFormat = [{
     custom<AsmInlineAttr>($inline_flag)
     custom<AsmVolatileAttr>($volatile_flag)
-    `(` 
+    `(`
        $template_code
       `:` custom<AsmOperands>($outputConstraints, $outputSymbols, $outputs,
                               type($outputs))
@@ -1020,23 +1020,22 @@ def AtomicOrderingAttr : I32EnumAttr<"AtomicOrdering", "atomic ordering", [
   let cppNamespace = "::mlir::gccjit";
 }
 
-def ATOMIC_RMW_STORE : I32EnumAttrCase<"Store", 0, "store">;
-def ATOMIC_RMW_XCHG : I32EnumAttrCase<"Xchg", 1, "xchg">;
-def ATOMIC_RMW_ADD_FETCH : I32EnumAttrCase<"AddFetch", 2, "add_fetch">;
-def ATOMIC_RMW_SUB_FETCH : I32EnumAttrCase<"SubFetch", 3, "sub_fetch">;
-def ATOMIC_RMW_AND_FETCH : I32EnumAttrCase<"AndFetch", 4, "and_fetch">;
-def ATOMIC_RMW_NAND_FETCH : I32EnumAttrCase<"NandFetch", 5, "nand_fetch">;
-def ATOMIC_RMW_OR_FETCH : I32EnumAttrCase<"OrFetch", 6, "or_fetch">;
-def ATOMIC_RMW_XOR_FETCH : I32EnumAttrCase<"XorFetch", 7, "xor_fetch">;
-def ATOMIC_RMW_FETCH_ADD : I32EnumAttrCase<"FetchAdd", 8, "fetch_add">;
-def ATOMIC_RMW_FETCH_SUB : I32EnumAttrCase<"FetchSub", 9, "fetch_sub">;
-def ATOMIC_RMW_FETCH_AND : I32EnumAttrCase<"FetchAnd", 10, "fetch_and">;
-def ATOMIC_RMW_FETCH_NAND : I32EnumAttrCase<"FetchNand", 11, "fetch_nand">;
-def ATOMIC_RMW_FETCH_OR : I32EnumAttrCase<"FetchOr", 12, "fetch_or">;
-def ATOMIC_RMW_FETCH_XOR : I32EnumAttrCase<"FetchXor", 13, "fetch_xor">;
+def ATOMIC_RMW_XCHG : I32EnumAttrCase<"Xchg", 0, "xchg">;
+def ATOMIC_RMW_ADD_FETCH : I32EnumAttrCase<"AddFetch", 1, "add_fetch">;
+def ATOMIC_RMW_SUB_FETCH : I32EnumAttrCase<"SubFetch", 2, "sub_fetch">;
+def ATOMIC_RMW_AND_FETCH : I32EnumAttrCase<"AndFetch", 3, "and_fetch">;
+def ATOMIC_RMW_NAND_FETCH : I32EnumAttrCase<"NandFetch", 4, "nand_fetch">;
+def ATOMIC_RMW_OR_FETCH : I32EnumAttrCase<"OrFetch", 5, "or_fetch">;
+def ATOMIC_RMW_XOR_FETCH : I32EnumAttrCase<"XorFetch", 6, "xor_fetch">;
+def ATOMIC_RMW_FETCH_ADD : I32EnumAttrCase<"FetchAdd", 7, "fetch_add">;
+def ATOMIC_RMW_FETCH_SUB : I32EnumAttrCase<"FetchSub", 8, "fetch_sub">;
+def ATOMIC_RMW_FETCH_AND : I32EnumAttrCase<"FetchAnd", 9, "fetch_and">;
+def ATOMIC_RMW_FETCH_NAND : I32EnumAttrCase<"FetchNand", 10, "fetch_nand">;
+def ATOMIC_RMW_FETCH_OR : I32EnumAttrCase<"FetchOr", 11, "fetch_or">;
+def ATOMIC_RMW_FETCH_XOR : I32EnumAttrCase<"FetchXor", 12, "fetch_xor">;
 
 def AtomicRMWKindAttr : I32EnumAttr<"AtomicRMWKind", "atomic rmw operation", [
-  ATOMIC_RMW_STORE, ATOMIC_RMW_XCHG, ATOMIC_RMW_ADD_FETCH, ATOMIC_RMW_SUB_FETCH,
+  ATOMIC_RMW_XCHG, ATOMIC_RMW_ADD_FETCH, ATOMIC_RMW_SUB_FETCH,
   ATOMIC_RMW_AND_FETCH, ATOMIC_RMW_NAND_FETCH, ATOMIC_RMW_OR_FETCH,
   ATOMIC_RMW_XOR_FETCH, ATOMIC_RMW_FETCH_ADD, ATOMIC_RMW_FETCH_SUB,
   ATOMIC_RMW_FETCH_AND, ATOMIC_RMW_FETCH_NAND, ATOMIC_RMW_FETCH_OR,
@@ -1061,6 +1060,22 @@ def AtomicLoadOp : GCCJIT_Op<"atomic.load"> {
   }];
 }
 
+def AtomicStoreOp : GCCJIT_Op<"atomic.store"> {
+  let summary = "Atomic store operation";
+  let description = [{
+    The `gccjit.atomic.store` operation represents an atomic store operation.
+
+    ```mlir
+    gccjit.atomic.store relaxed (%ptr : !gccjit.ptr<!i32>, %value : !i32)
+    ```
+  }];
+  let arguments = (ins GCCJIT_PointerType:$ptr, AnyType:$value,
+                       AtomicOrderingAttr:$ordering);
+  let assemblyFormat = [{
+    $ordering `(` $ptr `:` type($ptr) `,` $value `:` type($value) `)` attr-dict
+  }];
+}
+
 def AtomicRMWOp : GCCJIT_Op<"atomic.rmw"> {
   let summary = "Atomic rmw operation";
   let description = [{
@@ -1070,7 +1085,8 @@ def AtomicRMWOp : GCCJIT_Op<"atomic.rmw"> {
     %res = gccjit.atomic.rmw relaxed add_fetch (%ptr : !gccjit.ptr<!i32>, %value : !i32) : !i32
     ```
   }];
-  let arguments = (ins GCCJIT_PointerType:$ptr, AnyType:$value, AtomicRMWKindAttr:$kind, AtomicOrderingAttr:$ordering);
+  let arguments = (ins GCCJIT_PointerType:$ptr, AnyType:$value,
+                       AtomicRMWKindAttr:$kind, AtomicOrderingAttr:$ordering);
   let results = (outs AnyType:$result);
   let assemblyFormat = [{
     $ordering $kind  `(` $ptr `:` type($ptr) `,` $value `:` type($value) `)`
@@ -1081,24 +1097,26 @@ def AtomicRMWOp : GCCJIT_Op<"atomic.rmw"> {
 def AtomicCompareExchangeOp : GCCJIT_Op<"atomic.cmpxchg"> {
   let summary = "Atomic compare exchange operation";
   let description = [{
-    The `gccjit.atomic.cmpxchg` operation represents an atomic compare exchange operation.
+    The `gccjit.atomic.cmpxchg` operation represents an atomic compare exchange
+    operation.
 
     ```mlir
-    %res = gccjit.atomic.cmpxchg weak success(acq_rel) failure(relaxed) 
+    %res = gccjit.atomic.cmpxchg weak success(acq_rel) failure(relaxed)
       (%ptr : !gccjit.ptr<!i32>, %expected : !gccjit.ptr<!i32>, %desired : !i32) : !i1
     ```
   }];
-  let arguments = (ins 
-    GCCJIT_PointerType:$ptr, 
-    GCCJIT_PointerType:$expected, 
-    AnyType:$desired, 
-    AtomicOrderingAttr:$success_ord, 
-    AtomicOrderingAttr:$failure_ord, 
-    UnitAttr:$weak);
+  let arguments = (ins
+    GCCJIT_PointerType:$ptr,
+    GCCJIT_PointerType:$expected,
+    AnyType:$desired,
+    AtomicOrderingAttr:$success_ord,
+    AtomicOrderingAttr:$failure_ord,
+    UnitAttr:$weak
+  );
   let results = (outs GCCJIT_BoolType:$result);
   let assemblyFormat = [{
     custom<WeakAttr>($weak)
-    `success` `(` $success_ord `)` 
+    `success` `(` $success_ord `)`
     `failure` `(` $failure_ord `)`
     `(`
       $ptr `:` type($ptr) `,`
