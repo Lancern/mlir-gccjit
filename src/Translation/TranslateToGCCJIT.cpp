@@ -120,6 +120,7 @@ private:
   Expr visitExprWithoutCache(AccessFieldOp op);
   gcc_jit_lvalue *visitExprWithoutCache(DerefFieldOp op);
   gcc_jit_rvalue *visitExprWithoutCache(AtomicLoadOp op);
+  gcc_jit_rvalue *visitExprWithoutCache(AtomicRMWOp op);
 
   /// The following operations are entrypoints for real codegen.
   void visitAssignOp(gcc_jit_block *blk, AssignOp op);
@@ -604,6 +605,7 @@ Expr RegionVisitor::visitExpr(Value value, bool toplevel) {
             .Case([&](NewVectorOp op) { return visitExprWithoutCache(op); })
             .Case([&](DerefFieldOp op) { return visitExprWithoutCache(op); })
             .Case([&](AtomicLoadOp op) { return visitExprWithoutCache(op); })
+            .Case([&](AtomicRMWOp op) { return visitExprWithoutCache(op); })
             .Default([](Operation *op) -> Expr {
               op->dump();
               llvm::report_fatal_error("unknown expression type");
@@ -770,6 +772,74 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AtomicLoadOp op) {
   if (mlir::isa<IntegerType, IntType>(op.getType()))
     return result;
 
+  return gcc_jit_context_new_bitcast(translator.getContext(), loc, result,
+                                     translator.convertType(op.getType()));
+}
+
+gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AtomicRMWOp op) {
+  gcc_jit_location *loc = translator.getLocation(op.getLoc());
+
+  gcc_jit_rvalue *ptr =
+      castToVolatileVoidPtr(translator, visitExpr(op.getPtr()), loc);
+  gcc_jit_rvalue *val = visitExpr(op.getValue());
+  gcc_jit_rvalue *order = translateAtomicOrdering(translator, op.getOrdering());
+
+  size_t objectSize =
+      translator.getTypeSize(op.getPtr().getType().getElementType());
+  if (!mlir::isa<IntegerType, IntType>(op.getValue().getType())) {
+    gcc_jit_type *intTy =
+        gcc_jit_context_get_int_type(translator.getContext(), objectSize, true);
+    val = gcc_jit_context_new_bitcast(translator.getContext(), loc, val, intTy);
+  }
+
+  std::string builtinFuncName;
+  switch (op.getKind()) {
+  case AtomicRMWKind::Xchg:
+    builtinFuncName = "__atomic_exchange_";
+    break;
+  case AtomicRMWKind::AddFetch:
+    builtinFuncName = "__atomic_add_fetch_";
+    break;
+  case AtomicRMWKind::SubFetch:
+    builtinFuncName = "__atomic_sub_fetch_";
+    break;
+  case AtomicRMWKind::AndFetch:
+    builtinFuncName = "__atomic_and_fetch_";
+    break;
+  case AtomicRMWKind::NandFetch:
+    builtinFuncName = "__atomic_nand_fetch_";
+    break;
+  case AtomicRMWKind::OrFetch:
+    builtinFuncName = "__atomic_or_fetch_";
+    break;
+  case AtomicRMWKind::FetchAdd:
+    builtinFuncName = "__atomic_fetch_add_";
+    break;
+  case AtomicRMWKind::FetchSub:
+    builtinFuncName = "__atomic_fetch_sub_";
+    break;
+  case AtomicRMWKind::FetchAnd:
+    builtinFuncName = "__atomic_fetch_and_";
+    break;
+  case AtomicRMWKind::FetchNand:
+    builtinFuncName = "__atomic_fetch_nand_";
+    break;
+  case AtomicRMWKind::FetchOr:
+    builtinFuncName = "__atomic_fetch_or_";
+    break;
+  case AtomicRMWKind::FetchXor:
+    builtinFuncName = "__atomic_fetch_xor_";
+    break;
+  default:
+    llvm_unreachable("unknown atomic rmw op kind");
+  }
+
+  builtinFuncName += std::to_string(objectSize);
+  gcc_jit_rvalue *result = buildBuiltinFuncCall(
+      translator, builtinFuncName.c_str(), loc, {ptr, val, order});
+
+  if (mlir::isa<IntegerType, IntType>(op.getType()))
+    return result;
   return gcc_jit_context_new_bitcast(translator.getContext(), loc, result,
                                      translator.convertType(op.getType()));
 }
