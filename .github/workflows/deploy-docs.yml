@@ -10,6 +10,8 @@ jobs:
       LLVM_DIR: /usr/lib/llvm-18/cmake
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install build tools and libraries
         run: |
