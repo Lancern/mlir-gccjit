@@ -731,8 +731,15 @@ static gcc_jit_rvalue *translateAtomicOrdering(GCCJITTranslation &trans,
   case AtomicOrdering::SeqCst:
     gccMemOrder = __ATOMIC_SEQ_CST;
     break;
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#endif
   default:
     llvm_unreachable("unknown atomic ordering");
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
   }
 
   gcc_jit_type *gccMemOrderType =

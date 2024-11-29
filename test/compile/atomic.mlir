@@ -66,7 +66,7 @@ module @test attributes {
         ^entry(%arg0 : !gccjit.lvalue<!ppi32>, %arg1 : !gccjit.lvalue<!pi32>):
             %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!ppi32> to !ppi32
             %1 = gccjit.as_rvalue %arg1 : !gccjit.lvalue<!pi32> to !pi32
-            // CHECK: (void)__atomic_store_8 (((volatile void *)%{{.+}}), (bitcast(%{{.+}}, long long)), (int)0);
+            // CHECK: (void)__atomic_store_8 (((volatile void *)%{{.+}}), (bitcast(%{{.+}}, {{long long|long}})), (int)0);
             gccjit.atomic.store relaxed (%0 : !ppi32, %1 : !pi32)
             gccjit.return
     }
@@ -96,7 +96,7 @@ module @test attributes {
         ^entry(%arg0 : !gccjit.lvalue<!ppi32>, %arg1 : !gccjit.lvalue<!pi32>):
             %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!ppi32> to !ppi32
             %1 = gccjit.as_rvalue %arg1 : !gccjit.lvalue<!pi32> to !pi32
-            // CHECK: %{{.+}} = bitcast(__atomic_fetch_add_8 (((volatile void *)%{{.+}}), (bitcast(%{{.+}}, long long)), (int)0), __int32_t *);
+            // CHECK: %{{.+}} = bitcast(__atomic_fetch_add_8 (((volatile void *)%{{.+}}), (bitcast(%{{.+}}, {{long long|long}})), (int)0), __int32_t *);
             %2 = gccjit.atomic.rmw relaxed fetch_add (%0 : !ppi32, %1 : !pi32) : !pi32
             gccjit.return %2 : !pi32
     }
@@ -129,7 +129,7 @@ module @test attributes {
             %0 = gccjit.as_rvalue %arg0 : !gccjit.lvalue<!ppi32> to !ppi32
             %1 = gccjit.as_rvalue %arg1 : !gccjit.lvalue<!ppi32> to !ppi32
             %2 = gccjit.as_rvalue %arg2 : !gccjit.lvalue<!pi32> to !pi32
-            // CHECK: %{{.+}} = __atomic_compare_exchange_8 (((volatile void *)%{{.+}}), ((volatile const void *)%{{.+}}), (bitcast(%{{.+}}, long long)), (bool)1, (int)4, (int)0);
+            // CHECK: %{{.+}} = __atomic_compare_exchange_8 (((volatile void *)%{{.+}}), ((volatile const void *)%{{.+}}), (bitcast(%{{.+}}, {{long long|long}})), (bool)1, (int)4, (int)0);
             %3 = gccjit.atomic.cmpxchg weak success(acq_rel) failure(relaxed) (%0 : !ppi32, %1 : !ppi32, %2 : !pi32) : !bool
             gccjit.return %3 : !bool
     }
