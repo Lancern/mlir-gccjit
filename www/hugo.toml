@@ -1,4 +1,4 @@
-baseURL = 'https://example.org/'
+baseURL = 'https://lancern.github.io/mlir-gccjit/'
 
 languageCode = 'en-us'
 title = 'mlir-gccjit'
