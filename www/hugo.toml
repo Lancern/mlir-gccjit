@@ -1,0 +1,105 @@
+baseURL = 'https://example.org/'
+
+languageCode = 'en-us'
+title = 'mlir-gccjit'
+theme = 'hugo-theme-techdoc'
+
+[params]
+    # Source Code repository section
+    description = "An MLIR dialect for libgccjit"
+    github_repository = "https://github.com/Lancern/mlir-gccjit"
+    version = "0.1.0"
+
+    # Analytic section
+    google_analytics_id = "" # Your Google Analytics tracking id
+    tag_manager_container_id = "" # Your Google Tag Manager container id
+    google_site_verification = "" # Your Google Site Verification for Search Console
+
+    # Open Graph and Twitter Cards settings section
+    # Open Graph settings for each page are set on the front matter.
+    # See https://gohugo.io/templates/internal/#open-graph
+    # See https://gohugo.io/templates/internal/#twitter-cards
+    title = "mlir-gccjit"
+    images = [] # Open graph images are placed in `static/images`
+
+    # Theme settings section
+    # Theme color
+    # See color value reference https://developer.mozilla.org/en-US/docs/Web/CSS/color
+    custom_font_color = ""
+    custom_background_color = ""
+
+    # Documentation Menu section
+    # Menu style settings
+    menu_style = "slide-menu" # "open-menu" or "slide-menu" or "" blank is as no sidebar
+
+    # Date format
+    dateformat = "" # default "2 Jan 2006"
+    # See the format reference https://gohugo.io/functions/format/#hugo-date-and-time-templating-reference
+
+    # path name excluded from documentation menu
+    menu_exclusion = [
+        "archives",
+        "archive",
+        "blog",
+        "entry",
+        "post",
+        "posts",
+    ]
+
+
+# Global menu section
+# See https://gohugo.io/content-management/menus/
+[menu]
+    [[menu.main]]
+        name = "Source"
+        weight = 1
+
+        [[menu.main]]
+            name = "GitHub"
+            parent = "Source"
+            weight = 1
+            url = "https://github.com/Lancern/mlir-gccjit"
+
+        [[menu.main]]
+            name = "Doxygen"
+            parent = "Source"
+            weight = 2
+            url = "/doxygen/"
+
+    [[menu.main]]
+        name = "Issues"
+        weight = 2
+        url = "https://github.com/Lancern/mlir-gccjit/issues"
+
+    [[menu.main]]
+        name = "Links"
+        weight = 3
+
+        [[menu.main]]
+            name = "MLIR"
+            parent = "Links"
+            weight = 1
+            url = "https://mlir.llvm.org/"
+
+        [[menu.main]]
+            name = "LLVM"
+            parent = "Links"
+            weight = 2
+            url = "https://llvm.org/"
+
+        [[menu.main]]
+            name = "libgccjit"
+            parent = "Links"
+            weight = 3
+            url = "https://gcc.gnu.org/onlinedocs/jit/"
+
+# Markup configure section
+# See https://gohugo.io/getting-started/configuration-markup/
+[markup]
+    defaultMarkdownHandler = "goldmark"
+    [markup.goldmark.renderer]
+        unsafe= true
+    [markup.tableOfContents]
+        startLevel = 2
+        endLevel = 6
+        ordered = false

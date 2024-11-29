@@ -1,4 +1,7 @@
-# Build From Source
++++
+title = 'Build and Test'
+date = 2024-11-29T16:32:38+08:00
++++
 
 ## Prerequisites
 
@@ -55,3 +58,7 @@ Build with CMake:
 cmake -G Ninja ..
 cmake --build .
 ```
+
+## Test
+
+TODO
