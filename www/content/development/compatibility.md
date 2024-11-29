@@ -1,4 +1,7 @@
-# Compatibility
++++
+title = 'Compatibility'
+date = 2024-11-29T16:32:33+08:00
++++
 
 ## Minimum GCCJIT ABI requirement
 
@@ -8,7 +11,7 @@ Please refer to [ABI and API compatibility](https://gcc.gnu.org/onlinedocs/jit/t
 
 ## Known Issues
 
-### Polyfill of `gccjit.alignof` 
+### Polyfill of `gccjit.alignof`
 
 [`LIBGCCJIT_ABI_28`](https://gcc.gnu.org/onlinedocs/jit/topics/compatibility.html#libgccjit-abi-28) introduces `gcc_jit_context_new_alignof`. On targets before such ABI level, we calculate the alignment of a given type `T` by creating
 a dummy structure:
@@ -28,4 +31,3 @@ bitcast(&((dummy *)NULL)->__field, size_t)
 
 When alignment is specified, our lowering pass converts `memref.alloca` to an intrinsic call to `__builtin_alloca_with_align`. Unfortunately, due to some implementation details inside GCC, `libgccjit` currently cannot identidy the type of this builtin function hence would run into an ICE. We have reported this project to upstream and will keep track of the status. Such issues also apply to
 `__builtin_stack_save` and `__builtin_stack_restore`, which are required to implement scoped alloca.
-
