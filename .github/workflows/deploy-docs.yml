@@ -1,0 +1,49 @@
+name: Deploy Documentation Pages
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      LLVM_DIR: /usr/lib/llvm-18/cmake
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 cmake hugo ninja-build llvm-18-dev llvm-18-tools \
+          libmlir-18-dev libgccjit-14-dev mlir-18-tools
+
+      - name: Build and link MLIR documentation
+        run: |
+          cmake -B build -G Ninja -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 .
+          cmake --build build --target mlir-doc
+          cmake --build build --target link-mlir-docs
+
+      - name: Build hugo site
+        run: |
+          cd www
+          hugo
+
+      - name: Upload hugo site artifacts
+        id: deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: www/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy hugo site to GitHub pages
+        id: deployment
+        uses: actions/deploy-pages@v4
