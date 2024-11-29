@@ -1,7 +1,4 @@
 add_mlir_dialect(GCCJITOps gccjit)
-add_mlir_doc(GCCJITDialect GCCJITDialect GCCJIT/ -gen-dialect-doc)
-add_mlir_doc(GCCJITOps GCCJITOps GCCJIT/ -gen-op-doc)
-
 
 # Generate extra headers for custom enum and attrs.
 set(LLVM_TARGET_DEFINITIONS GCCJITOps.td)
@@ -11,5 +8,10 @@ mlir_tablegen(GCCJITOpsAttributes.h.inc -gen-attrdef-decls)
 mlir_tablegen(GCCJITOpsAttributes.cpp.inc -gen-attrdef-defs)
 add_public_tablegen_target(MLIRGCCJITEnumsGen)
 add_dependencies(mlir-headers MLIRGCCJITEnumsGen)
+
+add_mlir_gccjit_doc(GCCJITDialect GCCJITDialect gccjit/ -gen-dialect-doc)
+add_mlir_gccjit_doc(GCCJITOps GCCJITOps gccjit/ -gen-op-doc)
+add_mlir_gccjit_doc(GCCJITAttrs GCCJITAttrs gccjit/ -gen-attrdef-doc)
+add_mlir_gccjit_doc(GCCJITTypes GCCJITTypes gccjit/ -gen-typedef-doc)
 
 add_subdirectory(Interfaces)

@@ -1,2 +1,5 @@
 /public
 *.lock
+
+# Pages in content/dialect are reserved for generated docs.
+/content/dialect
