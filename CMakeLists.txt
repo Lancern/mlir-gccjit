@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
-project(mlir-gccjit C CXX)
-
-if (NOT PROJECT_IS_TOP_LEVEL)
-    message(FATAL_ERROR "For now mlir-gccjit must be the root project during build")
-endif ()
+project(mlir-gccjit
+    LANGUAGES C CXX
+)
 
 option(MLIR_GCCJIT_BUILD_TOOLS "Build mlir-gccjit tools" ON)
 option(MLIR_GCCJIT_ENABLE_TEST "Enable test targets in build" ON)

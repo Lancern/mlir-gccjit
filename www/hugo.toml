@@ -8,7 +8,7 @@ theme = 'hugo-theme-techdoc'
     # Source Code repository section
     description = "An MLIR dialect for libgccjit"
     github_repository = "https://github.com/Lancern/mlir-gccjit"
-    version = "0.1.0"
+    version = ""
 
     # Analytic section
     google_analytics_id = "" # Your Google Analytics tracking id
@@ -26,7 +26,7 @@ theme = 'hugo-theme-techdoc'
     # Theme color
     # See color value reference https://developer.mozilla.org/en-US/docs/Web/CSS/color
     custom_font_color = ""
-    custom_background_color = ""
+    custom_background_color = "#173559"
 
     # Documentation Menu section
     # Menu style settings
@@ -51,29 +51,23 @@ theme = 'hugo-theme-techdoc'
 # See https://gohugo.io/content-management/menus/
 [menu]
     [[menu.main]]
-        name = "Source"
+        name = "Repository"
         weight = 1
+        url = "https://github.com/Lancern/mlir-gccjit"
 
-        [[menu.main]]
-            name = "GitHub"
-            parent = "Source"
-            weight = 1
-            url = "https://github.com/Lancern/mlir-gccjit"
-
-        [[menu.main]]
-            name = "Doxygen"
-            parent = "Source"
-            weight = 2
-            url = "/doxygen/"
+    [[menu.main]]
+        name = "Releases"
+        weight = 2
+        url = "https://github.com/Lancern/mlir-gccjit/releases"
 
     [[menu.main]]
         name = "Issues"
-        weight = 2
+        weight = 3
         url = "https://github.com/Lancern/mlir-gccjit/issues"
 
     [[menu.main]]
         name = "Links"
-        weight = 3
+        weight = 4
 
         [[menu.main]]
             name = "MLIR"

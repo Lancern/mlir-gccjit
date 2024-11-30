@@ -27,8 +27,8 @@ For Ubuntu 24.04 (noble) users:
 apt-get install build-essential cmake ninja-build llvm-18-dev llvm-18-tools libmlir-18-dev libgccjit-14-dev mlir-18-tools
 ```
 
-Additionally, you need the [`lit` tool] to run tests. You can install the tool
-via `pip`:
+Additionally, you need Python and the [`lit` tool] to run tests. You can
+install the tool via `pip`:
 
 ```bash
 pip install lit
@@ -52,13 +52,15 @@ mkdir build
 cd build
 ```
 
-Build with CMake:
+Build with CMake and `ninja`:
 
 ```bash
 cmake -G Ninja ..
-cmake --build .
+ninja
 ```
 
-## Test
+You can run all tests via the `check` target:
 
-TODO
+```bash
+ninja check
+```
