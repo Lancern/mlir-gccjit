@@ -991,7 +991,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AlignOfOp op) {
   if (resTy.getKind() != GCC_JIT_TYPE_INT)
     align = gcc_jit_context_new_cast(getContext(), loc, align, resTyHandle);
   return align;
-#endif
+#else
   auto type = op.getType();
   auto *typeHandle = getTranslator().convertType(type);
   auto *resTyHandle = getTranslator().convertType(op.getResult().getType());
@@ -1018,6 +1018,7 @@ gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AlignOfOp op) {
     return gcc_jit_context_new_cast(getContext(), nullptr, fakeFieldAddrValue,
                                     resTyHandle);
   return fakeFieldAddrValue;
+#endif
 }
 
 gcc_jit_rvalue *RegionVisitor::visitExprWithoutCache(AsRValueOp op) {
