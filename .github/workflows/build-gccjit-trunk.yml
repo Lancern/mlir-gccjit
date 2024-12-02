@@ -1,0 +1,56 @@
+name: Build (gccjit-trunk)
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      LLVM_DIR: /usr/lib/llvm-18/cmake
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 gcc-14-multilib cmake ninja-build llvm-18-dev llvm-18-tools \
+          libmlir-18-dev mlir-18-tools python3 python3-pip build-essential \
+          libmpfr-dev libmpc-dev libgmp-dev flex bison libbison-dev
+          pip install lit
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Build GCCJIT
+        run: |
+          git clone --depth=1 https://github.com/gcc-mirror/gcc
+          mkdir gcc-build
+          mkdir gcc-install
+          export PREFIX=$(pwd)/gcc-install
+          export SCCACHE_GHA_ENABLED=true
+          cd gcc-build
+          ../gcc/configure CC='sccache gcc-14' CXX='sccache g++-14' \
+            --enable-host-shared \
+            --enable-languages=jit,c++ \
+            --disable-bootstrap \
+            --enable-checking=release \
+            --prefix=$PREFIX
+          make -j$(nproc)
+          make install
+          echo "GCCJIT_ROOT=$PREFIX" >> $GITHUB_ENV
+
+
+      - name: Build
+        run: |
+          export SCCACHE_GHA_ENABLED=true
+          cmake -B build -G Ninja \
+            -DGCCJIT_ROOT=${GCCJIT_ROOT} \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 .
+          cmake --build build
+          cmake --build build --target gccjit-tools
+
+      - name: Run tests
+        run: |
+          cmake --build build --target check
