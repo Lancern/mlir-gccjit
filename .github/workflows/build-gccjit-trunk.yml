@@ -22,10 +22,7 @@ jobs:
 
       - name: Build GCCJIT
         run: |
-          git clone https://github.com/gcc-mirror/gcc
-          pushd gcc
-          git checkout 4df8e6fc0cbc8358f88e81bb64b790af2a848a35
-          popd
+          git clone https://github.com/gcc-mirror/gcc --depth 1
           mkdir gcc-build
           mkdir gcc-install
           export PREFIX=$(pwd)/gcc-install
