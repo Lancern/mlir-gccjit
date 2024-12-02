@@ -1,9 +1,10 @@
 name: Build (gccjit-trunk)
-on: [push, pull_request]
+on: [push, pull_request, labeled]
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    if: contains(github.event.issue.labels.*.name, 'check-gcc-trunk')
     env:
       LLVM_DIR: /usr/lib/llvm-18/cmake
     steps:
