@@ -58,5 +58,5 @@ jobs:
 
       - name: Run tests
         run: |
-          sudo ln -s /usr/lib/x86_64-linux-gnu /usr/lib64
+          sudo ln -sf /usr/lib/gcc/x86_64-linux-gnu/14/* /usr/lib64
           cmake --build build --target check
