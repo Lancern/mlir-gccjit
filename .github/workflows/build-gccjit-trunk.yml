@@ -1,5 +1,8 @@
 name: Build (gccjit-trunk)
-on: [push, pull_request, labeled]
+on:
+  push:
+  pull_request:
+    types: [labeled, synchronize, opened, reopened]
 
 jobs:
   build:
