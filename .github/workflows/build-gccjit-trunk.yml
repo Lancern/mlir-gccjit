@@ -29,6 +29,7 @@ jobs:
           export SCCACHE_GHA_ENABLED=true
           cd gcc-build
           ../gcc/configure CC='sccache gcc-14' CXX='sccache g++-14' \
+            --disable-multilib \
             --enable-host-shared \
             --enable-languages=jit,c++ \
             --disable-bootstrap \
