@@ -22,7 +22,8 @@ jobs:
 
       - name: Build GCCJIT
         run: |
-          git clone https://github.com/gcc-mirror/gcc --depth 1
+          git clone https://github.com/gcc-mirror/gcc --single-branch -b trunk --shallow-since="Mon Dec 2 16:26:19 2024 +0000"
+          git checkout 4df8e6fc0cbc8358f88e81bb64b790af2a848a35
           mkdir gcc-build
           mkdir gcc-install
           export PREFIX=$(pwd)/gcc-install
