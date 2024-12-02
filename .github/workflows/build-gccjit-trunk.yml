@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    if: contains(github.event.issue.labels.*.name, 'check-gcc-trunk')
+    if: contains(github.event.pull_request.labels.*.name, 'check-gcc-trunk')
     env:
       LLVM_DIR: /usr/lib/llvm-18/cmake
     steps:
