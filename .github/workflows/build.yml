@@ -2,6 +2,19 @@ name: Build
 on: [push, pull_request]
 
 jobs:
+  check-format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install code formatters
+        run: |
+          sudo apt-get update
+          sudo apt-get install clang-format git
+
+      - name: Check code formatting
+        run: ./check-format.sh
+
   build:
     runs-on: ubuntu-24.04
     env:
